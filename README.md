@@ -9,4 +9,6 @@
 
 ## Detalhamento
 
-- O Projeto consiste em um sistema de gerenciamento de agendas, voltado para o Sistema da Saúde, onde o cliente poderá, de forma centralizada e organizada, controlar os processos e o cotidiano doas agentes que participam de uma consulta médica, como por exemplo: Paciente poder visualizar os horarios disponiveis para o atendimento do médico e poder escolher de acordo com sua preferencia; criação de relatorios para os médicos sobre as consultas do dia, contendo o horario, localização e o contexto da consulta e do paciente 
+O projeto consiste no desenvolvimento de um sistema de gerenciamento de agendas voltado para o setor de saúde, com o objetivo de centralizar e organizar os processos envolvidos no agendamento e acompanhamento de consultas médicas. A plataforma atenderá pacientes, médicos e secretárias, oferecendo recursos específicos para cada perfil de usuário.
+
+O sistema permitirá que pacientes visualizem, em tempo real, os horários disponíveis dos profissionais e realizem o agendamento de consultas de acordo com sua preferência. Para os médicos, serão gerados relatórios diários contendo a lista de atendimentos programados, com informações como horário, local da consulta e dados relevantes do paciente. Já para as secretárias, a solução oferecerá uma visão consolidada das agendas dos profissionais e da ocupação dos consultórios, facilitando a gestão de conflitos de horários e a organização operacional.
