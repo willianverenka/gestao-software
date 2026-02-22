@@ -13,7 +13,7 @@ O projeto consiste no desenvolvimento de um sistema de gerenciamento de agendas 
 
 O sistema permitirá que pacientes visualizem, em tempo real, os horários disponíveis dos profissionais e realizem o agendamento de consultas de acordo com sua preferência. Para os médicos, serão gerados relatórios diários contendo a lista de atendimentos programados, com informações como horário, local da consulta e dados relevantes do paciente. Já para as secretárias, a solução oferecerá uma visão consolidada das agendas dos profissionais e da ocupação dos consultórios, facilitando a gestão de conflitos de horários e a organização operacional.
 
-#JIRA:
+# JIRA:
 
 
 https://fei-gestao-software.atlassian.net?continue=https%3A%2F%2Ffei-gestao-software.atlassian.net%2Fwelcome%2Fsoftware&atlOrigin=eyJpIjoiNjFmYTcwNjM5YjkxNDUxZmE1OGNlZWQ4YTY0OGIyZjciLCJwIjoiaiJ9
