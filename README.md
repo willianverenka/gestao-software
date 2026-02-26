@@ -47,7 +47,12 @@
 
 - Shadcn para reutilizar componentes de interface
 
+
 # Reuso de padrões em arquitetura
 - Orientação a serviços a fim de desacoplar as regras de negócio da aplicação e aumentar a testabilidade e futura substituição de regras.
 
 - Arquitetura de mensageria assíncrona para melhorar a usabilidade da plataforma e a performance em requisições demoradas para o servidor, como a geração de PDFs, por exemplo.
+
+# Diagrama de componentes
+<img width="886" height="548" alt="image" src="https://github.com/user-attachments/assets/1992f816-3c1c-403c-aebd-c5e5afad8b46" />
+
