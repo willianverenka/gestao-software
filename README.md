@@ -6,6 +6,7 @@
 - Gabriel Lovato – Desenvolvedor front-end
 - João Guilherme Rogante e João Vitor Sitta – Desenvolvedores back-end
 
+<img width="741" height="461" alt="Diagrama-casos-de-uso drawio" src="https://github.com/user-attachments/assets/b9fff7a7-823a-4ead-aef8-4e36b5702a3e" />
 
 ## Detalhamento
 
