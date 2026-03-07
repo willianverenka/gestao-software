@@ -2,6 +2,7 @@
 
 ## Sprint 1
 ### Quadro kanban inicial da sprint 1
+https://fei-gestao-software.atlassian.net/jira/software/projects/SCRUM/boards/1
 <img width="1414" height="624" alt="image" src="https://github.com/user-attachments/assets/57df6d4c-5382-4c15-a801-e33d7a951af1" />
 ### Objetivos 
 O objetivo da sprint é iniciar o projeto com o setup de um ambiente de desenvolvimento que permita tanto os desenvolvedores front como back rodar o projeto com API + Interface + Banco de dados. Com essa base sólida, o planejamento é entregar 5 histórias (Cadastro de pacientes, funcionários, visualizar horários disponíveis, visualizar agenda do médico, agendar consulta), as histórias foram divididas inicialmente em 32 tarefas, distribuídas para cada desenvolvedor de acordo com sua área (back ou front).
