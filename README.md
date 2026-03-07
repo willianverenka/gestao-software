@@ -1,8 +1,8 @@
 # Projeto - MedSystem
 
 ## Estrutura da equipe SPRINT 1:
-- Willian Verenka – PO
-- Théo Zimmerman – SM
+- Willian Verenka – PO e Desenvolvedor back-end
+- Théo Zimmerman – SM e Desenvolvedor front-end
 - Gabriel Lovato – Desenvolvedor front-end
 - João Guilherme Rogante e João Vitor Sitta – Desenvolvedores back-end
 
