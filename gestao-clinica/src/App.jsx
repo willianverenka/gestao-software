@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import EmployeeRegistration from './pages/CadastroFuncionario/EmployeeRegistration';
 import PatientRegistration from './pages/CadastroPaciente/PatientRegistration';
 import Home from './pages/Home/Home';
+import Schedule from './pages/Calendario/Schedule';
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/cadastro-funcionario" element={<EmployeeRegistration />} />
             <Route path="/pacientes" element={<PatientRegistration />} />
+            <Route path="/calendario" element={<Schedule />} />
           </Routes>
         </div>
       </div>
