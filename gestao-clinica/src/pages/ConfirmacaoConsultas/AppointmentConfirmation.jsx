@@ -92,7 +92,7 @@ const AppointmentConfirmation = () => {
 
                   <Button
                     size="sm"
-                    className="bg-green-600 hover:bg-green-700"
+                    className="bg-blue-600 hover:bg-white-700 rounded-full"
                     onClick={() => confirmAppointment(appt.id)}
                     disabled={appt.status !== "Pendente"}
                   >
@@ -102,6 +102,7 @@ const AppointmentConfirmation = () => {
                   <Button
                     size="sm"
                     variant="destructive"
+                    className="rounded-full"
                     onClick={() => rejectAppointment(appt.id)}
                     disabled={appt.status !== "Pendente"}
                   >
