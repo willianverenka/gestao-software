@@ -178,23 +178,6 @@ O **Componente Agenda** requer a interface `IAgendamentoService` para funcionar.
 
 ## Como ocorre a comunicação entre os componentes
 
-```
-┌─────────────────────────────────┐         ┌──────────────────────────────────┐
-│     Componente Agenda           │         │    Componente Agendamento        │
-│                                 │         │                                  │
-│  AgendaService                  │         │  AgendamentoService              │
-│  ┌──────────────────────────┐   │ requer  │  ┌────────────────────────────┐ │
-│  │ __init__(                │──────────►──│  │ implements                 │ │
-│  │   agendamento_service:   │   │         │  │ IAgendamentoService        │ │
-│  │   IAgendamentoService    │   │         │  └────────────────────────────┘ │
-│  │ )                        │   │         │                                  │
-│  └──────────────────────────┘   │         │  fornece:                        │
-│                                 │  chama  │  buscar_consultas_por_periodo()  │
-│  buscar_consultas_confirmadas() │────────►│  registrar_agendamento()         │
-│  gerar_visualizacao_agenda()    │         │  listar_especialidades()  ...    │
-│  gerar_documento_agenda()       │         │                                  │
-└─────────────────────────────────┘         └──────────────────────────────────┘
-```
 
 A comunicação ocorre **exclusivamente por meio da interface `IAgendamentoService`**. O Componente Agenda invoca o método `buscar_consultas_por_periodo()` exposto por essa interface para obter os dados que precisa — sem conhecer nenhum detalhe interno do Componente Agendamento.
 
