@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import List, TypedDict
 
 from .base import BaseRepository
@@ -8,6 +8,14 @@ class ConsultaVisaoMedicoRow(TypedDict):
     consulta_id: int
     data_hora: str
     paciente_nome: str
+
+
+class ConsultaCriadaRow(TypedDict):
+    consulta_id: int
+    paciente_id: int
+    medico_id: int
+    data_hora: str
+    status: str
 
 
 class ConsultaRepository(BaseRepository):
@@ -45,3 +53,27 @@ class ConsultaRepository(BaseRepository):
             for row in rows
         ]
 
+    def create_consulta(
+        self,
+        paciente_id: int,
+        medico_id: int,
+        data_hora: datetime,
+        status: str,
+    ) -> ConsultaCriadaRow:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO consultas (paciente_id, medico_id, data_hora, status)
+            VALUES (?, ?, ?, ?)
+            """,
+            (paciente_id, medico_id, data_hora.isoformat(), status),
+        )
+        self.conn.commit()
+        consulta_id = cursor.lastrowid
+        return ConsultaCriadaRow(
+            consulta_id=consulta_id,
+            paciente_id=paciente_id,
+            medico_id=medico_id,
+            data_hora=data_hora.isoformat(),
+            status=status,
+        )
