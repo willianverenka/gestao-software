@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS funcionarios (
     funcionario_id INTEGER PRIMARY KEY AUTOINCREMENT,
     pessoa_id INTEGER NOT NULL UNIQUE,
     cargo TEXT NOT NULL CHECK (cargo IN ('backoffice', 'medico', 'secretaria')),
+    crm TEXT UNIQUE,
     FOREIGN KEY (pessoa_id) REFERENCES pessoas(pessoa_id)
 );
 
