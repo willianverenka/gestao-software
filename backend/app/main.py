@@ -4,7 +4,13 @@ from fastapi import Depends, FastAPI, HTTPException, status
 
 from .db import get_db, with_connection
 from .repositories import ConsultaRepository
-from .schemas import ConsultaCreateDTO, ConsultaCreatedDTO, ConsultaVisaoMedicoDTO
+from .schemas import (
+    ConsultaCreateDTO,
+    ConsultaCreatedDTO,
+    ConsultaVisaoMedicoDTO,
+    HorarioStatusDTO,
+    HorariosDisponiveisRequest,
+)
 from .startup_sql import run_startup_sql
 
 app = FastAPI()
@@ -81,6 +87,13 @@ def criar_consulta(
             detail=f"Médico com id {body.medico_id} não encontrado.",
         )
 
+    # Valida se horário está ocupado
+    if repo.horario_ocupado(medico_id=body.medico_id, data_hora=body.data_hora):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Horário {body.data_hora} já está ocupado para este médico.",
+        )
+
     nova = repo.create_consulta(
         paciente_id=body.paciente_id,
         medico_id=body.medico_id,
@@ -88,3 +101,33 @@ def criar_consulta(
         status=body.status,
     )
     return ConsultaCreatedDTO(**nova)
+
+
+@app.post(
+    "/medicos/{medico_id}/horarios-disponiveis",
+    response_model=list[HorarioStatusDTO],
+)
+def verificar_horarios_disponiveis(
+    medico_id: int,
+    body: HorariosDisponiveisRequest,
+    repo: ConsultaRepository = Depends(get_consulta_repository),
+) -> list[HorarioStatusDTO]:
+    # Valida se médico existe
+    cursor = repo.conn.cursor()
+    cursor.execute(
+        "SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'",
+        (medico_id,),
+    )
+    if cursor.fetchone() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Médico com id {medico_id} não encontrado.",
+        )
+
+    return [
+        HorarioStatusDTO(
+            data_hora=horario,
+            disponivel=not repo.horario_ocupado(medico_id=medico_id, data_hora=horario),
+        )
+        for horario in body.horarios
+    ]
