@@ -1,21 +1,24 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+import sqlite3
+from contextlib import contextmanager
 
-DATABASE_URL = "sqlite:///./data/app.db"
+# Path do banco (sqlite3 usa path do arquivo)
+DATABASE_PATH = "./data/app.db"
 
-engine = create_engine(
-    DATABASE_URL, connect_args={"check_same_thread": False}
-)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
+@contextmanager
+def with_connection():
+    """Context manager para obter uma conexão (ex.: uso no startup)."""
+    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def get_db():
-    db = SessionLocal()
+    """Generator que fornece uma conexão sqlite3 por request (FastAPI Depends)."""
+    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
     try:
-        yield db
+        yield conn
     finally:
-        db.close()
-
+        conn.close()

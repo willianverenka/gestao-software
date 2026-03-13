@@ -1,14 +1,15 @@
 from fastapi import Depends, FastAPI
-from sqlalchemy.orm import Session
 
-from .db import Base, engine, get_db
+from .db import get_db, with_connection
+from .startup_sql import run_startup_sql
 
 app = FastAPI()
 
 
 @app.on_event("startup")
 def on_startup() -> None:
-    Base.metadata.create_all(bind=engine)
+    with with_connection() as conn:
+        run_startup_sql(conn)
 
 
 @app.get("/health")
@@ -17,6 +18,6 @@ def read_health():
 
 
 @app.get("/db-check")
-def db_check(db: Session = Depends(get_db)):
+def db_check(conn=Depends(get_db)):
+    conn.execute("SELECT 1")
     return {"status": "db-ok"}
-
