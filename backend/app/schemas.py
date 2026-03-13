@@ -26,3 +26,11 @@ class ConsultaCreatedDTO(BaseModel):
     medico_id: int
     data_hora: datetime
     status: str
+
+class HorariosDisponiveisRequest(BaseModel):
+    horarios: List[datetime]  # lista que o front envia
+
+
+class HorarioStatusDTO(BaseModel):
+    data_hora: datetime
+    disponivel: bool
