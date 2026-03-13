@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Literal
 
 from pydantic import BaseModel
 
@@ -12,3 +12,17 @@ class ConsultaVisaoMedicoDTO(BaseModel):
 
 ConsultaVisaoMedicoList = List[ConsultaVisaoMedicoDTO]
 
+
+class ConsultaCreateDTO(BaseModel):
+    paciente_id: int
+    medico_id: int
+    data_hora: datetime
+    status: Literal["agendada", "confirmada", "cancelada"] = "agendada"
+
+
+class ConsultaCreatedDTO(BaseModel):
+    consulta_id: int
+    paciente_id: int
+    medico_id: int
+    data_hora: datetime
+    status: str
