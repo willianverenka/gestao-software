@@ -43,7 +43,6 @@ class ConsultaRepository(BaseRepository):
             (medico_id, data.isoformat()),
         )
         rows = cursor.fetchall()
-
         return [
             ConsultaVisaoMedicoRow(
                 consulta_id=row[0],
@@ -52,6 +51,20 @@ class ConsultaRepository(BaseRepository):
             )
             for row in rows
         ]
+
+    def horario_ocupado(self, medico_id: int, data_hora: datetime) -> bool:
+        """Retorna True se já existe consulta agendada ou confirmada nesse horário."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT 1 FROM consultas
+            WHERE medico_id = ?
+              AND data_hora = ?
+              AND status IN ('agendada', 'confirmada')
+            """,
+            (medico_id, data_hora.isoformat()),
+        )
+        return cursor.fetchone() is not None
 
     def create_consulta(
         self,
