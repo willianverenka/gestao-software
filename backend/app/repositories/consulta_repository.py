@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import List, TypedDict
+from typing import List, Optional, TypedDict
 
 from .base import BaseRepository
 
@@ -16,6 +16,7 @@ class ConsultaCriadaRow(TypedDict):
     medico_id: int
     data_hora: str
     status: str
+    protocolo: str
 
 
 class ConsultaRepository(BaseRepository):
@@ -66,6 +67,11 @@ class ConsultaRepository(BaseRepository):
         )
         return cursor.fetchone() is not None
 
+    def _gerar_protocolo(self, consulta_id: int, data_hora: datetime) -> str:
+        """Gera protocolo no formato YYYYMM-{consulta_id:03d}. Ex: 202603-001"""
+        prefixo = data_hora.strftime("%Y%m")
+        return f"{prefixo}-{consulta_id:03d}"
+
     def create_consulta(
         self,
         paciente_id: int,
@@ -74,6 +80,8 @@ class ConsultaRepository(BaseRepository):
         status: str,
     ) -> ConsultaCriadaRow:
         cursor = self.conn.cursor()
+
+        # Insere a consulta sem protocolo primeiro
         cursor.execute(
             """
             INSERT INTO consultas (paciente_id, medico_id, data_hora, status)
@@ -81,12 +89,21 @@ class ConsultaRepository(BaseRepository):
             """,
             (paciente_id, medico_id, data_hora.isoformat(), status),
         )
-        self.conn.commit()
         consulta_id = cursor.lastrowid
+
+        # Gera e salva o protocolo único
+        protocolo = self._gerar_protocolo(consulta_id, data_hora)
+        cursor.execute(
+            "UPDATE consultas SET protocolo = ? WHERE consulta_id = ?",
+            (protocolo, consulta_id),
+        )
+        self.conn.commit()
+
         return ConsultaCriadaRow(
             consulta_id=consulta_id,
             paciente_id=paciente_id,
             medico_id=medico_id,
             data_hora=data_hora.isoformat(),
             status=status,
+            protocolo=protocolo,
         )

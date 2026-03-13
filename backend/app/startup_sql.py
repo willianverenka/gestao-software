@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS funcionarios (
     funcionario_id INTEGER PRIMARY KEY AUTOINCREMENT,
     pessoa_id INTEGER NOT NULL UNIQUE,
     cargo TEXT NOT NULL CHECK (cargo IN ('backoffice', 'medico', 'secretaria')),
+    crm TEXT UNIQUE,
     FOREIGN KEY (pessoa_id) REFERENCES pessoas(pessoa_id)
 );
 
@@ -37,6 +38,7 @@ CREATE TABLE IF NOT EXISTS consultas (
     medico_id INTEGER NOT NULL,
     data_hora DATETIME NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('agendada', 'confirmada', 'cancelada')),
+    protocolo TEXT UNIQUE,
     FOREIGN KEY (paciente_id) REFERENCES pacientes(paciente_id),
     FOREIGN KEY (medico_id) REFERENCES funcionarios(funcionario_id)
 );
