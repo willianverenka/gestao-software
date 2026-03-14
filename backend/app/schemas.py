@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import List, Literal
+from datetime import datetime, date, time
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel
 
@@ -27,10 +27,45 @@ class ConsultaCreatedDTO(BaseModel):
     data_hora: datetime
     status: str
 
+
 class HorariosDisponiveisRequest(BaseModel):
-    horarios: List[datetime]  # lista que o front envia
+    horarios: List[datetime]
 
 
 class HorarioStatusDTO(BaseModel):
     data_hora: datetime
     disponivel: bool
+
+
+class FuncionarioCreateDTO(BaseModel):
+    pessoa_id: int
+    cargo: Literal["backoffice", "medico", "secretaria"]
+    crm: Optional[str] = None  # obrigatório só se cargo == 'medico'
+
+
+class FuncionarioCreatedDTO(BaseModel):
+    funcionario_id: int
+    pessoa_id: int
+    cargo: str
+    crm: Optional[str] = None
+
+
+class PessoaCreateDTO(BaseModel):
+    nome: str
+    cpf: str
+    data_nascimento: date
+
+
+class PessoaCreatedDTO(BaseModel):
+    pessoa_id: int
+    nome: str
+    cpf: str
+    data_nascimento: date
+
+
+class HorarioDTO(BaseModel):
+    medico_id: int
+    medico_nome: str
+    especialidade: str
+    data: date
+    hora: time
