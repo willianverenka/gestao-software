@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from typing import List, TypedDict
 
 from .base import BaseRepository
@@ -90,3 +90,53 @@ class ConsultaRepository(BaseRepository):
             data_hora=data_hora.isoformat(),
             status=status,
         )
+
+    def listar_horarios_disponiveis(self, especialidade: str, data: date):
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT f.funcionario_id, p.nome
+            FROM funcionarios f
+            JOIN pessoas p ON p.pessoa_id = f.pessoa_id
+            WHERE f.cargo = 'medico'
+            """,
+        )
+        medicos = cursor.fetchall()
+
+        horarios_disponiveis = []
+
+        start_time = time(8, 0)
+        end_time = time(17, 0)
+
+        for medico_id, nome in medicos:
+            atual = datetime.combine(data, start_time)
+            limite = datetime.combine(data, end_time)
+
+            while atual < limite:
+                cursor.execute(
+                    """
+                    SELECT 1 FROM consultas
+                    WHERE medico_id = ?
+                      AND data_hora = ?
+                      AND status IN ('agendada', 'confirmada')
+                    """,
+                    (medico_id, atual.isoformat()),
+                )
+
+                ocupado = cursor.fetchone()
+
+                if not ocupado:
+                    horarios_disponiveis.append(
+                        {
+                            "medico_id": medico_id,
+                            "medico_nome": nome,
+                            "especialidade": especialidade,
+                            "data": data,
+                            "hora": atual.time(),
+                        }
+                    )
+
+                atual += timedelta(minutes=30)
+
+        return horarios_disponiveis
