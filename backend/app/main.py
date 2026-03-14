@@ -50,8 +50,15 @@ def get_consulta_repository(conn=Depends(get_db)) -> ConsultaRepository:
 def get_consultas_visao_medico(
     medico_id: int,
     data: date,
+    solicitante_id: int,
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> list[ConsultaVisaoMedicoDTO]:
+    # Regra de privacidade: médico só pode ver a própria agenda
+    if solicitante_id != medico_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado. Médico só pode visualizar a própria agenda.",
+        )
     consultas = repo.get_consultas_visao_medico(medico_id=medico_id, data=data)
     return [
         ConsultaVisaoMedicoDTO(
@@ -74,7 +81,6 @@ def criar_consulta(
 ) -> ConsultaCreatedDTO:
     cursor = repo.conn.cursor()
 
-    # Valida se paciente existe
     cursor.execute("SELECT 1 FROM pacientes WHERE paciente_id = ?", (body.paciente_id,))
     if cursor.fetchone() is None:
         raise HTTPException(
@@ -82,11 +88,8 @@ def criar_consulta(
             detail=f"Paciente com id {body.paciente_id} não encontrado.",
         )
 
-    # Valida se médico existe e é do cargo 'medico'
     cursor.execute(
-        """
-        SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'
-        """,
+        "SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'",
         (body.medico_id,),
     )
     if cursor.fetchone() is None:
@@ -95,7 +98,6 @@ def criar_consulta(
             detail=f"Médico com id {body.medico_id} não encontrado.",
         )
 
-    # Valida se horário está ocupado
     if repo.horario_ocupado(medico_id=body.medico_id, data_hora=body.data_hora):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -120,12 +122,9 @@ def verificar_horarios_disponiveis(
     body: HorariosDisponiveisRequest,
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> list[HorarioStatusDTO]:
-    # Valida se médico existe
     cursor = repo.conn.cursor()
     cursor.execute(
-        """
-        SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'
-        """,
+        "SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'",
         (medico_id,),
     )
     if cursor.fetchone() is None:
@@ -142,6 +141,7 @@ def verificar_horarios_disponiveis(
         for horario in body.horarios
     ]
 
+
 @app.post(
     "/funcionarios",
     response_model=FuncionarioCreatedDTO,
@@ -153,34 +153,42 @@ def criar_funcionario(
 ) -> FuncionarioCreatedDTO:
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
-        SELECT 1 FROM pessoas WHERE pessoa_id = ?
-        """,
-        (body.pessoa_id,),
-    )
+    # Valida se pessoa existe
+    cursor.execute("SELECT 1 FROM pessoas WHERE pessoa_id = ?", (body.pessoa_id,))
     if cursor.fetchone() is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Pessoa com id {body.pessoa_id} não encontrada.",
         )
+
+    # Regra: CRM obrigatório para médico
+    if body.cargo == "medico" and not body.crm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CRM é obrigatório para médicos.",
+        )
+
+    # Regra: secretaria e backoffice não podem ter CRM
+    if body.cargo != "medico" and body.crm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CRM é permitido apenas para médicos.",
+        )
+
     cursor.execute(
-        """
-        INSERT INTO funcionarios (pessoa_id, cargo) 
-        VALUES (?, ?)
-        """,
+        "INSERT INTO funcionarios (pessoa_id, cargo) VALUES (?, ?)",
         (body.pessoa_id, body.cargo),
     )
-
     conn.commit()
-
     funcionario_id = cursor.lastrowid
 
     return FuncionarioCreatedDTO(
         funcionario_id=funcionario_id,
         pessoa_id=body.pessoa_id,
         cargo=body.cargo,
+        crm=body.crm,
     )
+
 
 @app.post(
     "/pessoas",
@@ -191,7 +199,6 @@ def criar_pessoa(
     body: PessoaCreateDTO,
     conn=Depends(get_db),
 ) -> PessoaCreatedDTO:
-    
     repo = PessoaRepository(conn)
 
     if repo.cpf_exists(body.cpf):
@@ -199,21 +206,21 @@ def criar_pessoa(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"CPF {body.cpf} já cadastrado para outra pessoa.",
         )
-    
-    idade = repo.calcular_idade(body.data_nascimento)
 
+    idade = repo.calcular_idade(body.data_nascimento)
     if idade < 18:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Pessoa deve ser maior de 18 anos.",
         )
-    pessoa = repo.create_pessoa(body)
 
+    pessoa = repo.create_pessoa(body)
     return PessoaCreatedDTO(**pessoa)
+
 
 @app.get(
     "/horarios",
-    response_model=List[HorarioDTO]
+    response_model=List[HorarioDTO],
 )
 def listar_horarios_disponiveis(
     especialidade: str,
