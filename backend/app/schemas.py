@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, time
 from typing import List, Literal
 
 from pydantic import BaseModel
@@ -59,3 +59,11 @@ class PessoaCreatedDTO(BaseModel):
     nome: str
     cpf: str
     data_nascimento: date
+
+class HorarioDTO(BaseModel):
+    #horario disponivel para agendamento de consulta
+    medico_id:int
+    medico_nome:str
+    especialidade:str
+    data:date
+    hora:time
