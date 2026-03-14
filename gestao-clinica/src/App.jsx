@@ -3,7 +3,7 @@ import EmployeeRegistration from './pages/CadastroFuncionario/EmployeeRegistrati
 import PatientRegistration from './pages/CadastroPaciente/PatientRegistration';
 import Home from './pages/Home/Home';
 import Schedule from './pages/Calendario/Schedule';
-
+import AppointmentConfirmation from './pages/ConfirmacaoConsultas/AppointmentConfirmation';
 function App() {
   return (
     <Router> 
@@ -14,6 +14,7 @@ function App() {
             <Route path="/cadastro-funcionario" element={<EmployeeRegistration />} />
             <Route path="/pacientes" element={<PatientRegistration />} />
             <Route path="/calendario" element={<Schedule />} />
+            <Route path="/confirmacao-consultas" element={<AppointmentConfirmation />} />
           </Routes>
         </div>
       </div>
