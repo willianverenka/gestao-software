@@ -3,13 +3,17 @@ from datetime import date
 from fastapi import Depends, FastAPI, HTTPException, status
 
 from .db import get_db, with_connection
-from .repositories import ConsultaRepository
+from .repositories import ConsultaRepository, PessoaRepository
 from .schemas import (
     ConsultaCreateDTO,
     ConsultaCreatedDTO,
     ConsultaVisaoMedicoDTO,
+    FuncionarioCreateDTO,
+    FuncionarioCreatedDTO,
     HorarioStatusDTO,
     HorariosDisponiveisRequest,
+    PessoaCreateDTO,
+    PessoaCreatedDTO,
 )
 from .startup_sql import run_startup_sql
 
@@ -78,7 +82,9 @@ def criar_consulta(
 
     # Valida se médico existe e é do cargo 'medico'
     cursor.execute(
-        "SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'",
+        """
+        SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'
+        """,
         (body.medico_id,),
     )
     if cursor.fetchone() is None:
@@ -115,7 +121,9 @@ def verificar_horarios_disponiveis(
     # Valida se médico existe
     cursor = repo.conn.cursor()
     cursor.execute(
-        "SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'",
+        """
+        SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'
+        """,
         (medico_id,),
     )
     if cursor.fetchone() is None:
@@ -131,3 +139,72 @@ def verificar_horarios_disponiveis(
         )
         for horario in body.horarios
     ]
+
+@app.post(
+    "/funcionarios",
+    response_model=FuncionarioCreatedDTO,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_funcionario(
+    body: FuncionarioCreateDTO,
+    conn=Depends(get_db),
+) -> FuncionarioCreatedDTO:
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT 1 FROM pessoas WHERE pessoa_id = ?
+        """,
+        (body.pessoa_id,),
+    )
+    if cursor.fetchone() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pessoa com id {body.pessoa_id} não encontrada.",
+        )
+    cursor.execute(
+        """
+        INSERT INTO funcionarios (pessoa_id, cargo) 
+        VALUES (?, ?)
+        """,
+        (body.pessoa_id, body.cargo),
+    )
+
+    conn.commit()
+
+    funcionario_id = cursor.lastrowid
+
+    return FuncionarioCreatedDTO(
+        funcionario_id=funcionario_id,
+        pessoa_id=body.pessoa_id,
+        cargo=body.cargo,
+    )
+
+@app.post(
+    "/pessoas",
+    response_model=PessoaCreatedDTO,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_pessoa(
+    body: PessoaCreateDTO,
+    conn=Depends(get_db),
+) -> PessoaCreatedDTO:
+    
+    repo = PessoaRepository(conn)
+
+    if repo.cpf_exists(body.cpf):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"CPF {body.cpf} já cadastrado para outra pessoa.",
+        )
+    
+    idade = repo.calcular_idade(body.data_nascimento)
+
+    if idade < 18:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pessoa deve ser maior de 18 anos.",
+        )
+    pessoa = repo.create_pessoa(body)
+
+    return PessoaCreatedDTO(**pessoa)
