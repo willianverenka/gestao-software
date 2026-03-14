@@ -153,7 +153,6 @@ def criar_funcionario(
 ) -> FuncionarioCreatedDTO:
     cursor = conn.cursor()
 
-    # Valida se pessoa existe
     cursor.execute("SELECT 1 FROM pessoas WHERE pessoa_id = ?", (body.pessoa_id,))
     if cursor.fetchone() is None:
         raise HTTPException(
@@ -161,14 +160,12 @@ def criar_funcionario(
             detail=f"Pessoa com id {body.pessoa_id} não encontrada.",
         )
 
-    # Regra: CRM obrigatório para médico
     if body.cargo == "medico" and not body.crm:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="CRM é obrigatório para médicos.",
         )
 
-    # Regra: secretaria e backoffice não podem ter CRM
     if body.cargo != "medico" and body.crm:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -215,6 +212,47 @@ def criar_pessoa(
         )
 
     pessoa = repo.create_pessoa(body)
+    return PessoaCreatedDTO(**pessoa)
+
+
+@app.post(
+    "/pacientes",
+    response_model=PessoaCreatedDTO,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_paciente(
+    body: PessoaCreateDTO,
+    conn=Depends(get_db),
+) -> PessoaCreatedDTO:
+    repo = PessoaRepository(conn)
+
+    # Valida CPF duplicado
+    if repo.cpf_exists(body.cpf):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"CPF {body.cpf} já cadastrado.",
+        )
+
+    # Valida idade mínima
+    idade = repo.calcular_idade(body.data_nascimento)
+    if idade < 18:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Paciente deve ser maior de 18 anos.",
+        )
+
+    # Cria a pessoa
+    pessoa = repo.create_pessoa(body)
+    pessoa_id = pessoa["pessoa_id"]
+
+    # Vincula como paciente
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO pacientes (pessoa_id) VALUES (?)",
+        (pessoa_id,),
+    )
+    conn.commit()
+
     return PessoaCreatedDTO(**pessoa)
 
 
