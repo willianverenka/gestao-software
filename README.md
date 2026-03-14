@@ -8,6 +8,7 @@
 - João Vitor Sitta - 221230543
 - João Rogante - 222230815
 
+---
 
 # Lab 03 — Modelo Arquitetural
 
@@ -144,6 +145,8 @@ Responsável por toda a lógica de agendamento de consultas médicas. Gerencia e
 
 Responsável pela visualização e geração de documentos de agenda. Busca as consultas confirmadas em um período e as formata para exibição ou exportação. É o componente **cliente** nesta arquitetura — ele **depende** do Componente Agendamento para obter os dados de consultas.
 
+---
+
 ## Interfaces
 
 ### Interfaces Fornecidas
@@ -171,11 +174,14 @@ Responsável pela visualização e geração de documentos de agenda. Busca as c
 
 O **Componente Agenda** requer a interface `IAgendamentoService` para funcionar. Ela é injetada via construtor — o componente nunca instancia diretamente a implementação concreta.
 
-
+---
 
 ## Como ocorre a comunicação entre os componentes
 
+
 A comunicação ocorre **exclusivamente por meio da interface `IAgendamentoService`**. O Componente Agenda invoca o método `buscar_consultas_por_periodo()` exposto por essa interface para obter os dados que precisa — sem conhecer nenhum detalhe interno do Componente Agendamento.
+
+---
 
 ## Como foi evitado o acoplamento direto
 
@@ -197,6 +203,8 @@ class AgendaService(IAgendaService):
     def __init__(self, agendamento_service: IAgendamentoService):  # ← interface, não classe concreta
         self._agendamento_service = agendamento_service
 ```
+
+---
 
 ## Estrutura do projeto
 
@@ -220,6 +228,8 @@ lab04/
 ├── main.py                          # Ponto de entrada e demonstração
 └── README.md
 ```
+
+---
 
 ## Instruções para execução
 
