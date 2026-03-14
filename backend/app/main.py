@@ -1,6 +1,7 @@
 from datetime import date
 
 from fastapi import Depends, FastAPI, HTTPException, status
+from typing import List
 
 from .db import get_db, with_connection
 from .repositories import ConsultaRepository, PessoaRepository
@@ -10,6 +11,7 @@ from .schemas import (
     ConsultaVisaoMedicoDTO,
     FuncionarioCreateDTO,
     FuncionarioCreatedDTO,
+    HorarioDTO,
     HorarioStatusDTO,
     HorariosDisponiveisRequest,
     PessoaCreateDTO,
@@ -208,3 +210,16 @@ def criar_pessoa(
     pessoa = repo.create_pessoa(body)
 
     return PessoaCreatedDTO(**pessoa)
+
+@app.get(
+    "/horarios",
+    response_model=List[HorarioDTO]
+)
+def listar_horarios_disponiveis(
+    especialidade: str,
+    data: date,
+    conn=Depends(get_db),
+):
+    repo = ConsultaRepository(conn)
+    horarios = repo.listar_horarios_disponiveis(especialidade, data)
+    return [HorarioDTO(**h) for h in horarios]
