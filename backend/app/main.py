@@ -226,14 +226,12 @@ def criar_paciente(
 ) -> PessoaCreatedDTO:
     repo = PessoaRepository(conn)
 
-    # Valida CPF duplicado
     if repo.cpf_exists(body.cpf):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"CPF {body.cpf} já cadastrado.",
         )
 
-    # Valida idade mínima
     idade = repo.calcular_idade(body.data_nascimento)
     if idade < 18:
         raise HTTPException(
@@ -241,11 +239,9 @@ def criar_paciente(
             detail="Paciente deve ser maior de 18 anos.",
         )
 
-    # Cria a pessoa
     pessoa = repo.create_pessoa(body)
     pessoa_id = pessoa["pessoa_id"]
 
-    # Vincula como paciente
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO pacientes (pessoa_id) VALUES (?)",
