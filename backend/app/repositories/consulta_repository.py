@@ -66,6 +66,11 @@ class ConsultaRepository(BaseRepository):
         )
         return cursor.fetchone() is not None
 
+    def _gerar_protocolo(self, consulta_id: int, data_hora: datetime) -> str:
+        """Gera protocolo no formato YYYYMM-{id:03d}. Ex: 202603-001"""
+        prefixo = data_hora.strftime("%Y%m")
+        return f"{prefixo}-{consulta_id:03d}"
+
     def create_consulta(
         self,
         paciente_id: int,
@@ -74,6 +79,8 @@ class ConsultaRepository(BaseRepository):
         status: str,
     ) -> ConsultaCriadaRow:
         cursor = self.conn.cursor()
+
+        # Insere a consulta
         cursor.execute(
             """
             INSERT INTO consultas (paciente_id, medico_id, data_hora, status)
@@ -81,8 +88,16 @@ class ConsultaRepository(BaseRepository):
             """,
             (paciente_id, medico_id, data_hora.isoformat(), status),
         )
-        self.conn.commit()
         consulta_id = cursor.lastrowid
+
+        # Gera e salva o protocolo único
+        protocolo = self._gerar_protocolo(consulta_id, data_hora)
+        cursor.execute(
+            "UPDATE consultas SET protocolo = ? WHERE consulta_id = ?",
+            (protocolo, consulta_id),
+        )
+        self.conn.commit()
+
         return ConsultaCriadaRow(
             consulta_id=consulta_id,
             paciente_id=paciente_id,
@@ -105,7 +120,6 @@ class ConsultaRepository(BaseRepository):
         medicos = cursor.fetchall()
 
         horarios_disponiveis = []
-
         start_time = time(8, 0)
         end_time = time(17, 0)
 
@@ -123,7 +137,6 @@ class ConsultaRepository(BaseRepository):
                     """,
                     (medico_id, atual.isoformat()),
                 )
-
                 ocupado = cursor.fetchone()
 
                 if not ocupado:
@@ -136,7 +149,6 @@ class ConsultaRepository(BaseRepository):
                             "hora": atual.time(),
                         }
                     )
-
                 atual += timedelta(minutes=30)
 
         return horarios_disponiveis
