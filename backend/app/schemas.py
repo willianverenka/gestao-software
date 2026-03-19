@@ -4,14 +4,73 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel
 
 
-class ConsultaVisaoMedicoDTO(BaseModel):
-    consulta_id: int
-    data_hora: datetime
-    paciente_nome: str
+# ──────────────────── Pessoa ────────────────────
+
+class PessoaCreateDTO(BaseModel):
+    nome: str
+    cpf: str
+    email: str
+    data_nascimento: date
+    telefone: Optional[str] = None
+    genero: Optional[Literal["M", "F", "O"]] = None
 
 
-ConsultaVisaoMedicoList = List[ConsultaVisaoMedicoDTO]
+class PessoaCreatedDTO(BaseModel):
+    pessoa_id: int
+    nome: str
+    cpf: str
+    email: str
+    data_nascimento: date
+    telefone: Optional[str] = None
+    genero: Optional[str] = None
 
+
+# ──────────────────── Funcionário ────────────────────
+
+class FuncionarioCreateDTO(BaseModel):
+    nome: str
+    cpf: str
+    email: str
+    data_nascimento: date
+    telefone: Optional[str] = None
+    genero: Optional[Literal["M", "F", "O"]] = None
+    cargo: Literal["backoffice", "medico", "secretaria"]
+    crm: Optional[str] = None
+    especialidade: Optional[str] = None
+
+
+class FuncionarioCreatedDTO(BaseModel):
+    funcionario_id: int
+    pessoa_id: int
+    nome: str
+    email: str
+    cargo: str
+    crm: Optional[str] = None
+    especialidade: Optional[str] = None
+
+
+# ──────────────────── Paciente ────────────────────
+
+class PacienteCreateDTO(BaseModel):
+    nome: str
+    cpf: str
+    email: str
+    data_nascimento: date
+    telefone: Optional[str] = None
+    genero: Optional[Literal["M", "F", "O"]] = None
+    convenio: Optional[str] = None
+
+
+class PacienteCreatedDTO(BaseModel):
+    paciente_id: int
+    pessoa_id: int
+    nome: str
+    cpf: str
+    email: str
+    data_nascimento: date
+
+
+# ──────────────────── Consulta ────────────────────
 
 class ConsultaCreateDTO(BaseModel):
     paciente_id: int
@@ -26,7 +85,16 @@ class ConsultaCreatedDTO(BaseModel):
     medico_id: int
     data_hora: datetime
     status: str
+    protocolo: Optional[str] = None
 
+
+class ConsultaVisaoMedicoDTO(BaseModel):
+    consulta_id: int
+    data_hora: datetime
+    paciente_nome: str
+
+
+# ──────────────────── Horários ────────────────────
 
 class HorariosDisponiveisRequest(BaseModel):
     horarios: List[datetime]
@@ -35,32 +103,6 @@ class HorariosDisponiveisRequest(BaseModel):
 class HorarioStatusDTO(BaseModel):
     data_hora: datetime
     disponivel: bool
-
-
-class FuncionarioCreateDTO(BaseModel):
-    pessoa_id: int
-    cargo: Literal["backoffice", "medico", "secretaria"]
-    crm: Optional[str] = None  # obrigatório só se cargo == 'medico'
-
-
-class FuncionarioCreatedDTO(BaseModel):
-    funcionario_id: int
-    pessoa_id: int
-    cargo: str
-    crm: Optional[str] = None
-
-
-class PessoaCreateDTO(BaseModel):
-    nome: str
-    cpf: str
-    data_nascimento: date
-
-
-class PessoaCreatedDTO(BaseModel):
-    pessoa_id: int
-    nome: str
-    cpf: str
-    data_nascimento: date
 
 
 class HorarioDTO(BaseModel):

@@ -2,6 +2,7 @@ from .base import BaseRepository
 
 
 class PacienteRepository(BaseRepository):
+
     def criar_paciente(self, pessoa_id: int, convenio_id: int = None) -> dict:
         cursor = self.conn.cursor()
         cursor.execute(
@@ -17,3 +18,8 @@ class PacienteRepository(BaseRepository):
             "pessoa_id": pessoa_id,
             "convenio_id": convenio_id,
         }
+
+    def exists(self, paciente_id: int) -> bool:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT 1 FROM pacientes WHERE paciente_id = ?", (paciente_id,))
+        return cursor.fetchone() is not None
