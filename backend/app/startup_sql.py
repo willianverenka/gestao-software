@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS pessoas (
     cpf TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
     telefone TEXT,
-    data_nascimento DATE,
+    data_nascimento DATE NOT NULL,
     genero CHAR(1) CHECK (genero IN ('M', 'F', 'O'))
 );
 
@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS funcionarios (
     funcionario_id INTEGER PRIMARY KEY AUTOINCREMENT,
     pessoa_id INTEGER NOT NULL UNIQUE,
     cargo TEXT NOT NULL CHECK (cargo IN ('backoffice', 'medico', 'secretaria')),
+    crm TEXT,
+    especialidade TEXT,
     FOREIGN KEY (pessoa_id) REFERENCES pessoas(pessoa_id)
 );
 

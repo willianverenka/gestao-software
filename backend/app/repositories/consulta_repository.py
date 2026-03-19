@@ -16,9 +16,11 @@ class ConsultaCriadaRow(TypedDict):
     medico_id: int
     data_hora: str
     status: str
+    protocolo: str
 
 
 class ConsultaRepository(BaseRepository):
+
     def get_consultas_visao_medico(
         self,
         medico_id: int,
@@ -53,7 +55,6 @@ class ConsultaRepository(BaseRepository):
         ]
 
     def horario_ocupado(self, medico_id: int, data_hora: datetime) -> bool:
-        """Retorna True se já existe consulta agendada ou confirmada nesse horário."""
         cursor = self.conn.cursor()
         cursor.execute(
             """
@@ -90,7 +91,6 @@ class ConsultaRepository(BaseRepository):
         )
         consulta_id = cursor.lastrowid
 
-        # Gera e salva o protocolo único
         protocolo = self._gerar_protocolo(consulta_id, data_hora)
         cursor.execute(
             "UPDATE consultas SET protocolo = ? WHERE consulta_id = ?",
@@ -104,18 +104,22 @@ class ConsultaRepository(BaseRepository):
             medico_id=medico_id,
             data_hora=data_hora.isoformat(),
             status=status,
+            protocolo=protocolo,
         )
 
     def listar_horarios_disponiveis(self, especialidade: str, data: date):
         cursor = self.conn.cursor()
 
+        # ✅ Agora filtra apenas médicos da especialidade solicitada
         cursor.execute(
             """
             SELECT f.funcionario_id, p.nome
             FROM funcionarios f
             JOIN pessoas p ON p.pessoa_id = f.pessoa_id
             WHERE f.cargo = 'medico'
+              AND f.especialidade = ?
             """,
+            (especialidade,),
         )
         medicos = cursor.fetchall()
 
