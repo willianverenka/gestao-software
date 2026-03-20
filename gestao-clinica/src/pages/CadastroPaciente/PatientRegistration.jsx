@@ -36,15 +36,20 @@ const PatientRegistration = () => {
 
   const handleSelectChange = (name, value) => {
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
   };
+
+  const validarEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const novosErros = {};
     
-    if (!formData.nome) novosErros.nome = "Nome é obrigatório";
-    if (!formData.cpf) novosErros.cpf = "CPF é obrigatório";
-    
+    if (!formData.nome.trim()) novosErros.nome = "Nome é obrigatório";
+    if (!formData.cpf.trim()) novosErros.cpf = "CPF é obrigatório";
+    if (!formData.email.trim()) novosErros.email = "E-mail é obrigatório.";
+    else if (!validarEmail(formData.email)) novosErros.email = "Insira um e-mail válido.";
+
     if (Object.keys(novosErros).length > 0) {
       setErrors(novosErros);
       return;
@@ -53,7 +58,7 @@ const PatientRegistration = () => {
     setLoading(true);
 
     try {
-      const URL_API_PACIENTES = '';
+      const URL_API_PACIENTES = 'http://localhost:8000/pacientes';
 
       const response = await fetch(URL_API_PACIENTES, {
         method: 'POST',
@@ -62,11 +67,9 @@ const PatientRegistration = () => {
         },
         body: JSON.stringify({
           nome: formData.nome,
-          email: formData.email,
-          cpf: formData.cpf.replace(/[^\d]+/g, ''), 
-          data_nascimento: formData.dataNascimento, 
-          telefone: formData.telefone,
-          genero: formData.genero,
+          email: formData.email.trim(),
+          cpf: formData.cpf.replace(/[^\d]+/g, ''),
+          telefone: formData.telefone || null,
           convenio: formData.convenio,
         }),
       });
@@ -74,17 +77,29 @@ const PatientRegistration = () => {
       if (response.ok) {
         alert('Paciente cadastrado com sucesso!');
         setFormData({
-          nome: '', 
-          email: '', 
-          cpf: '', 
+          nome: '',
+          email: '',
+          cpf: '',
           dataNascimento: '',
-          telefone: '', 
-          genero: '', 
+          telefone: '',
+          genero: '',
           convenio: 'particular'
         });
       } else {
-        const errorData = await response.json();
-        alert(`Erro no servidor: ${errorData.message || 'Falha ao salvar.'}`);
+        let msg = 'Falha ao salvar.';
+        try {
+          const errorData = await response.json();
+          if (typeof errorData.detail === 'string') {
+            msg = errorData.detail;
+          } else if (Array.isArray(errorData.detail)) {
+            msg = errorData.detail.map((e) => e.msg || JSON.stringify(e)).join(' ');
+          } else if (errorData.message) {
+            msg = errorData.message;
+          }
+        } catch {
+          /* corpo não-JSON */
+        }
+        alert(`Erro no servidor: ${msg}`);
       }
     } catch (error) {
       console.error("Erro na conexão:", error);
@@ -110,12 +125,14 @@ const PatientRegistration = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="nome">Nome Completo</Label>
-            <Input id="nome" name="nome" value={formData.nome} onChange={handleChange} />
+            <Input id="nome" name="nome" value={formData.nome} onChange={handleChange} className={errors.nome ? "border-red-500" : ""} />
+            {errors.nome && <span className="text-sm text-red-500 font-medium">{errors.nome}</span>}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="cpf">CPF</Label>
-            <Input id="cpf" name="cpf" value={formData.cpf} onChange={handleChange} placeholder="000.000.000-00" />
+            <Input id="cpf" name="cpf" value={formData.cpf} onChange={handleChange} placeholder="000.000.000-00" className={errors.cpf ? "border-red-500" : ""} />
+            {errors.cpf && <span className="text-sm text-red-500 font-medium">{errors.cpf}</span>}
           </div>
 
           <div className="space-y-2">
@@ -125,7 +142,8 @@ const PatientRegistration = () => {
 
           <div className="space-y-2">
             <Label htmlFor="email">E-mail</Label>
-            <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} />
+            <Input id="email" name="email" type="email" value={formData.email} onChange={handleChange} className={errors.email ? "border-red-500" : ""} />
+            {errors.email && <span className="text-sm text-red-500 font-medium">{errors.email}</span>}
           </div>
 
           <div className="space-y-2">
@@ -135,7 +153,7 @@ const PatientRegistration = () => {
 
           <div className="space-y-2">
             <Label>Gênero</Label>
-            <Select onValueChange={(v) => handleSelectChange('genero', v)}>
+            <Select value={formData.genero || undefined} onValueChange={(v) => handleSelectChange('genero', v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>
@@ -149,7 +167,7 @@ const PatientRegistration = () => {
 
           <div className="space-y-2">
             <Label>Convênio</Label>
-            <Select onValueChange={(v) => handleSelectChange('convenio', v)} defaultValue="particular">
+            <Select value={formData.convenio} onValueChange={(v) => handleSelectChange('convenio', v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o convênio" />
               </SelectTrigger>

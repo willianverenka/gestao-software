@@ -108,7 +108,7 @@ const EmployeeRegistration = () => {
     setLoading(true);
 
     try {
-      const URL_API_FUNCIONARIOS = '';
+      const URL_API_FUNCIONARIOS = 'http://localhost:8000/funcionarios';
 
       const response = await fetch(URL_API_FUNCIONARIOS, {
         method: 'POST',
@@ -118,20 +118,31 @@ const EmployeeRegistration = () => {
         body: JSON.stringify({
           nome: formData.nome,
           email: formData.email,
-          cpf: formData.cpf.replace(/[^\d]+/g, ''), 
-          telefone: formData.telefone,
+          cpf: formData.cpf.replace(/[^\d]+/g, ''),
+          telefone: formData.telefone || null,
           cargo: formData.cargo,
           crm: formData.cargo === 'medico' ? formData.crm : null,
           especialidade: formData.cargo === 'medico' ? formData.especialidade : null,
-          password: formData.senha, 
         }),
       });
 
       if (response.ok) {
         alert('Funcionário cadastrado com sucesso!');
       } else {
-        const errorData = await response.json();
-        alert(`Erro ao cadastrar: ${errorData.message || 'Verifique os dados.'}`);
+        let msg = 'Verifique os dados.';
+        try {
+          const errorData = await response.json();
+          if (typeof errorData.detail === 'string') {
+            msg = errorData.detail;
+          } else if (Array.isArray(errorData.detail)) {
+            msg = errorData.detail.map((e) => e.msg || JSON.stringify(e)).join(' ');
+          } else if (errorData.message) {
+            msg = errorData.message;
+          }
+        } catch {
+          /* corpo não-JSON */
+        }
+        alert(`Erro ao cadastrar: ${msg}`);
       }
     } catch (error) {
       console.error("Erro na requisição:", error);

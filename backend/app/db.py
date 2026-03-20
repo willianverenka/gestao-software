@@ -9,6 +9,7 @@ DATABASE_PATH = "./data/app.db"
 def with_connection():
     """Context manager para obter uma conexão (ex.: uso no startup)."""
     conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+    conn.execute("PRAGMA foreign_keys = ON")
     try:
         yield conn
     finally:
@@ -18,6 +19,7 @@ def with_connection():
 def get_db():
     """Generator que fornece uma conexão sqlite3 por request (FastAPI Depends)."""
     conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+    conn.execute("PRAGMA foreign_keys = ON")
     try:
         yield conn
     finally:
