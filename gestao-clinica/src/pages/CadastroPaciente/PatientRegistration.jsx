@@ -188,7 +188,8 @@ const FormAgendamento = ({ paciente, onFinalizado }) => {
     fetchHorarios();
   }, [especialidade, date]);
 
-  const slotsUnicos = [...new Set(horarios.map(h => h.hora))].sort();
+  // Remove os segundos (08:00:00 → 08:00)
+  const slotsUnicos = [...new Set(horarios.map(h => h.hora.slice(0, 5)))].sort();
 
   const handleSelecionarSlot = async (slot) => {
     setSelectedSlot(slot);
@@ -248,21 +249,24 @@ const FormAgendamento = ({ paciente, onFinalizado }) => {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-xl p-4">
-            <h3 className="font-semibold mb-3 flex items-center text-slate-800">
-              <Clock className="mr-2 h-4 w-4 text-blue-600" /> Horários
-            </h3>
+            <div className="flex justify-between items-start mb-3">
+              <h3 className="font-semibold flex items-center text-slate-800 text-sm">
+                <Clock className="mr-2 h-4 w-4 text-blue-600 shrink-0" /> Horários para {especialidade}
+              </h3>
+              <span className="text-xs text-slate-400 border border-slate-200 rounded-md px-2 py-1 shrink-0 ml-2">30 min</span>
+            </div>
             {loadingHorarios ? (
               <p className="text-slate-500 text-center py-4 text-sm">Carregando...</p>
             ) : slotsUnicos.length === 0 ? (
               <p className="text-slate-500 text-center py-4 text-sm">Nenhum horário disponível.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-2">
                 {slotsUnicos.map(slot => (
                   <button key={slot} onClick={() => handleSelecionarSlot(slot)}
-                    className={`w-full p-3 rounded-xl border text-sm font-bold transition-all text-left ${
+                    className={`py-2.5 px-1 rounded-lg border text-sm font-semibold transition-all duration-200 text-center ${
                       selectedSlot === slot
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white text-slate-700 border-slate-200 hover:border-blue-400 hover:bg-blue-50'
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-blue-400 hover:bg-blue-50'
                     }`}>
                     {slot}
                   </button>

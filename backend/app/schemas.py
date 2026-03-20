@@ -1,12 +1,19 @@
-from datetime import datetime, date, time
-from typing import List, Literal, Optional
+"""
+Schemas (DTOs) do projeto.
+
+Cada schema é um Pydantic model que define o formato dos dados
+que entram (Create) ou saem (Response) da API.
+"""
+
+from datetime import date, datetime, time
+from typing import Literal, Optional
 
 from pydantic import BaseModel
 
 
-# ──────────────────── Pessoa ────────────────────
+# ── Pessoa ──
 
-class PessoaCreateDTO(BaseModel):
+class PessoaCreate(BaseModel):
     nome: str
     cpf: str
     email: str
@@ -15,7 +22,7 @@ class PessoaCreateDTO(BaseModel):
     genero: Optional[Literal["M", "F", "O"]] = None
 
 
-class PessoaCreatedDTO(BaseModel):
+class PessoaResponse(BaseModel):
     pessoa_id: int
     nome: str
     cpf: str
@@ -25,9 +32,9 @@ class PessoaCreatedDTO(BaseModel):
     genero: Optional[str] = None
 
 
-# ──────────────────── Funcionário ────────────────────
+# ── Funcionário ──
 
-class FuncionarioCreateDTO(BaseModel):
+class FuncionarioCreate(BaseModel):
     nome: str
     cpf: str
     email: str
@@ -39,7 +46,7 @@ class FuncionarioCreateDTO(BaseModel):
     especialidade: Optional[str] = None
 
 
-class FuncionarioCreatedDTO(BaseModel):
+class FuncionarioResponse(BaseModel):
     funcionario_id: int
     pessoa_id: int
     nome: str
@@ -49,9 +56,9 @@ class FuncionarioCreatedDTO(BaseModel):
     especialidade: Optional[str] = None
 
 
-# ──────────────────── Paciente ────────────────────
+# ── Paciente ──
 
-class PacienteCreateDTO(BaseModel):
+class PacienteCreate(BaseModel):
     nome: str
     cpf: str
     email: str
@@ -61,7 +68,7 @@ class PacienteCreateDTO(BaseModel):
     convenio: Optional[str] = None
 
 
-class PacienteCreatedDTO(BaseModel):
+class PacienteResponse(BaseModel):
     paciente_id: int
     pessoa_id: int
     nome: str
@@ -70,16 +77,16 @@ class PacienteCreatedDTO(BaseModel):
     data_nascimento: date
 
 
-# ──────────────────── Consulta ────────────────────
+# ── Consulta ──
 
-class ConsultaCreateDTO(BaseModel):
+class ConsultaCreate(BaseModel):
     paciente_id: int
     medico_id: int
     data_hora: datetime
     status: Literal["agendada", "confirmada", "cancelada"] = "agendada"
 
 
-class ConsultaCreatedDTO(BaseModel):
+class ConsultaResponse(BaseModel):
     consulta_id: int
     paciente_id: int
     medico_id: int
@@ -88,26 +95,32 @@ class ConsultaCreatedDTO(BaseModel):
     protocolo: Optional[str] = None
 
 
-class ConsultaVisaoMedicoDTO(BaseModel):
+class ConsultaVisaoMedico(BaseModel):
     consulta_id: int
     data_hora: datetime
     paciente_nome: str
 
 
-# ──────────────────── Horários ────────────────────
+# ── Horários ──
 
 class HorariosDisponiveisRequest(BaseModel):
-    horarios: List[datetime]
+    horarios: list[datetime]
 
 
-class HorarioStatusDTO(BaseModel):
+class HorarioStatus(BaseModel):
     data_hora: datetime
     disponivel: bool
 
 
-class HorarioDTO(BaseModel):
+class HorarioDisponivel(BaseModel):
     medico_id: int
     medico_nome: str
     especialidade: str
     data: date
     hora: time
+
+
+# ── Status update ──
+
+class StatusUpdate(BaseModel):
+    status: Literal["agendada", "confirmada", "cancelada"]
