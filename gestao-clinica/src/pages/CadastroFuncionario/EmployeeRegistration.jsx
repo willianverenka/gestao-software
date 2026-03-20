@@ -22,6 +22,7 @@ const EmployeeRegistration = () => {
     telefone: '', 
     cargo: 'recepcionista', 
     crm: '', 
+    especialidade: '',
     senha: '', 
     confirmarSenha: ''
   });
@@ -38,6 +39,7 @@ const EmployeeRegistration = () => {
   const handleCargoChange = (value) => {
     setFormData(prev => ({ ...prev, cargo: value }));
     if (errors.crm) setErrors(prev => ({ ...prev, crm: '' }));
+    if (errors.especialidade) setErrors(prev => ({ ...prev, especialidade: '' }));
   };
 
   const validarEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -90,6 +92,9 @@ const EmployeeRegistration = () => {
       } else if (!validarCRM(formData.crm)) {
         novosErros.crm = "Formato de CRM inválido (Ex: 123456-SP).";
       }
+      if (!formData.especialidade) {
+        novosErros.especialidade = "A especialidade é obrigatória para médicos.";
+      }
     }
     
     if (formData.senha.length < 6) novosErros.senha = "Mínimo de 6 caracteres.";
@@ -117,6 +122,7 @@ const EmployeeRegistration = () => {
           telefone: formData.telefone,
           cargo: formData.cargo,
           crm: formData.cargo === 'medico' ? formData.crm : null,
+          especialidade: formData.cargo === 'medico' ? formData.especialidade : null,
           password: formData.senha, 
         }),
       });
@@ -187,11 +193,37 @@ const EmployeeRegistration = () => {
         </div>
 
         {formData.cargo === 'medico' && (
-          <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-            <Label htmlFor="crm">CRM</Label>
-            <Input id="crm" name="crm" value={formData.crm} onChange={handleChange} placeholder="Ex: 123456-SP" className={errors.crm ? "border-red-500" : ""} />
-            {errors.crm && <span className="text-sm text-red-500 font-medium">{errors.crm}</span>}
-          </div>
+          <>
+            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+              <Label htmlFor="crm">CRM</Label>
+              <Input id="crm" name="crm" value={formData.crm} onChange={handleChange} placeholder="Ex: 123456-SP" className={errors.crm ? "border-red-500" : ""} />
+              {errors.crm && <span className="text-sm text-red-500 font-medium">{errors.crm}</span>}
+            </div>
+
+            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+              <Label>Especialidade</Label>
+              <Select value={formData.especialidade} onValueChange={(value) => {
+                setFormData(prev => ({ ...prev, especialidade: value }));
+                if (errors.especialidade) setErrors(prev => ({ ...prev, especialidade: '' }));
+              }}>
+                <SelectTrigger className={errors.especialidade ? "border-red-500" : ""}>
+                  <SelectValue placeholder="Selecione a especialidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cardiologia">Cardiologia</SelectItem>
+                  <SelectItem value="clinico_geral">Clínico Geral</SelectItem>
+                  <SelectItem value="dermatologia">Dermatologia</SelectItem>
+                  <SelectItem value="ginecologia">Ginecologia</SelectItem>
+                  <SelectItem value="neurologia">Neurologia</SelectItem>
+                  <SelectItem value="oftalmologia">Oftalmologia</SelectItem>
+                  <SelectItem value="ortopedia">Ortopedia</SelectItem>
+                  <SelectItem value="pediatria">Pediatria</SelectItem>
+                  <SelectItem value="psiquiatria">Psiquiatria</SelectItem>
+                </SelectContent>
+              </Select>
+              {errors.especialidade && <span className="text-sm text-red-500 font-medium">{errors.especialidade}</span>}
+            </div>
+          </>
         )}
 
         <div className="space-y-2">
