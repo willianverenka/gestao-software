@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, model_validator
@@ -51,6 +51,37 @@ class PacienteCreate(BaseModel):
 class PacienteCreatedDTO(BaseModel):
     paciente_id: int
     pessoa_id: int
+
+
+class ConsultasDisponiveisResponse(BaseModel):
+    horarios: List[str]
+
+
+class ConsultasDisponiveisRequest(BaseModel):
+    pass
+
+
+class ConsultaAgendarRequest(BaseModel):
+    paciente_id: int
+    especialidade: str
+    data: date
+    hora: str
+
+    @model_validator(mode="after")
+    def validar_hora(self):
+        # HH:MM (ex.: 09:30). Não validamos o passo 30 min aqui.
+        if len(self.hora) != 5 or self.hora[2] != ":":
+            raise ValueError("Hora inválida. Use o formato HH:MM.")
+        hh, mm = self.hora.split(":")
+        if not (hh.isdigit() and mm.isdigit()):
+            raise ValueError("Hora inválida. Use o formato HH:MM.")
+        return self
+
+
+class ConsultaAgendadaDTO(BaseModel):
+    consulta_id: int
+    medico_id: int
+    data_hora: datetime
 
 
 class ConsultaVisaoMedicoDTO(BaseModel):

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Clock, Calendar as CalendarIcon, Stethoscope } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const ESPECIALIDADES = [
-  { id: '1', nome: 'Cardiologia' },
-  { id: '2', nome: 'Pediatria' },
-  { id: '3', nome: 'Ortopedia' }
+  { id: 'cardiologia', nome: 'Cardiologia' },
+  { id: 'pediatria', nome: 'Pediatria' },
+  { id: 'ortopedia', nome: 'Ortopedia' },
 ];
 
 const Schedule = () => {
@@ -19,7 +19,18 @@ const Schedule = () => {
   const [date, setDate] = useState(new Date());
   const [selectedSlot, setSelectedSlot] = useState(null);
 
-  const occupiedSlots = ['09:00', '10:30', '14:00', '15:15'];
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [agendando, setAgendando] = useState(false);
+
+  const availableSet = useMemo(() => new Set(availableSlots), [availableSlots]);
+
+  const formatDate = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   const timeSlots = useMemo(() => {
     const slots = [];
@@ -28,6 +39,67 @@ const Schedule = () => {
     }
     return slots;
   }, []);
+
+  const fetchDisponiveis = async (dataObj = date, esp = especialidade) => {
+    if (!esp) return;
+    setLoadingSlots(true);
+    setAvailableSlots([]);
+    setSelectedSlot(null);
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/consultas/disponiveis?data=${formatDate(dataObj)}&especialidade=${encodeURIComponent(esp)}`
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      setAvailableSlots(payload?.horarios || []);
+    } catch (error) {
+      console.error("Erro ao buscar horários disponíveis:", error);
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
+
+  const handleAgendar = async () => {
+    if (!selectedSlot || !especialidade) return;
+    setAgendando(true);
+
+    try {
+      const response = await fetch("http://localhost:8000/consultas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paciente_id: 1,
+          especialidade,
+          data: formatDate(date),
+          hora: selectedSlot,
+        }),
+      });
+
+      if (!response.ok) {
+        let msg = `HTTP ${response.status}`;
+        try {
+          const errorData = await response.json();
+          msg = errorData?.detail || errorData?.message || msg;
+        } catch {
+          // corpo não-JSON
+        }
+        throw new Error(msg);
+      }
+
+      await fetchDisponiveis();
+      alert("Consulta agendada com sucesso!");
+    } catch (error) {
+      console.error("Erro ao agendar consulta:", error);
+      alert(error.message || "Falha ao agendar consulta.");
+    } finally {
+      setAgendando(false);
+    }
+  };
+
+  useEffect(() => {
+    if (especialidade) fetchDisponiveis();
+  }, [especialidade, date]);
 
   return (
     <div className="max-w-6xl mx-auto mt-8 p-6">
@@ -102,7 +174,7 @@ const Schedule = () => {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {timeSlots.map(slot => {
-                const isOccupied = occupiedSlots.includes(slot);
+                const isOccupied = loadingSlots || !availableSet.has(slot);
                 const isSelected = selectedSlot === slot;
 
                 return (
@@ -130,8 +202,12 @@ const Schedule = () => {
                     Dia {date?.toLocaleDateString('pt-BR')} às <span className="text-blue-400 font-bold">{selectedSlot}</span>
                   </p>
                 </div>
-                <Button className="bg-blue-600 hover:bg-blue-500 px-10 h-12 rounded-xl font-bold">
-                  Finalizar Agendamento
+                <Button
+                  className="bg-blue-600 hover:bg-blue-500 px-10 h-12 rounded-xl font-bold"
+                  onClick={handleAgendar}
+                  disabled={agendando || loadingSlots}
+                >
+                  {agendando ? "Agendando..." : "Finalizar Agendamento"}
                 </Button>
               </div>
             )}

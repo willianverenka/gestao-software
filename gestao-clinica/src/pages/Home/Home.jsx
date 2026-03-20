@@ -31,6 +31,16 @@ const Home = () => {
           <p className="text-slate-500 text-sm mb-4">Registre novos pacientes e gerencie informações de convênio.</p>
           <Button variant="outline" className="w-full">Acessar Cadastro</Button>
         </div>
+
+        <div className="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+             onClick={() => navigate('/calendario')}>
+          <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center mb-4">
+            <Activity className="text-emerald-600" />
+          </div>
+          <h3 className="text-xl font-semibold mb-2">Agendar consulta</h3>
+          <p className="text-slate-500 text-sm mb-4">Visualize horários disponíveis e marque sua consulta.</p>
+          <Button variant="outline" className="w-full">Acessar Calendário</Button>
+        </div>
       </div>
     </div>
   );

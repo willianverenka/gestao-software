@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,8 +15,11 @@ from .repositories import (
 )
 from .schemas import (
     ConsultaVisaoMedicoDTO,
+    ConsultasDisponiveisResponse,
     FuncionarioCreate,
     FuncionarioCreatedDTO,
+    ConsultaAgendarRequest,
+    ConsultaAgendadaDTO,
     PacienteCreate,
     PacienteCreatedDTO,
 )
@@ -83,6 +86,80 @@ def get_convenio_repository(conn=Depends(get_db)) -> ConvenioRepository:
 
 def get_paciente_repository(conn=Depends(get_db)) -> PacienteRepository:
     return PacienteRepository(conn)
+
+
+@app.get(
+    "/consultas/disponiveis",
+    response_model=ConsultasDisponiveisResponse,
+)
+def get_consultas_disponiveis(
+    data: date,
+    especialidade: str,
+    repo: ConsultaRepository = Depends(get_consulta_repository),
+) -> ConsultasDisponiveisResponse:
+    horarios = repo.get_horarios_disponiveis_por_especialidade(
+        especialidade=especialidade,
+        data=data,
+    )
+    return ConsultasDisponiveisResponse(horarios=horarios)
+
+
+@app.post(
+    "/consultas",
+    response_model=ConsultaAgendadaDTO,
+    status_code=status.HTTP_201_CREATED,
+)
+def agendar_consulta(
+    body: ConsultaAgendarRequest,
+    conn=Depends(get_db),
+    repo: ConsultaRepository = Depends(get_consulta_repository),
+) -> ConsultaAgendadaDTO:
+    data_hora_str = f"{body.data.isoformat()} {body.hora}:00"
+    try:
+        conn.execute("BEGIN")
+        medico_id = repo.get_primeiro_medico_disponivel(
+            especialidade=body.especialidade,
+            data=body.data,
+            hora=body.hora,
+        )
+        if medico_id is None:
+            conn.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Nenhum médico disponível para o horário informado.",
+            )
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO consultas (paciente_id, medico_id, data_hora, status)
+            VALUES (?, ?, ?, ?)
+            """,
+            (body.paciente_id, medico_id, data_hora_str, "agendada"),
+        )
+        consulta_id = int(cursor.lastrowid)
+        conn.commit()
+    except HTTPException as e:
+        conn.rollback()
+        raise e
+    except sqlite3.IntegrityError as e:
+        conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{type(e).__name__}: {e}",
+        ) from e
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__}: {e}",
+        ) from e
+
+    return ConsultaAgendadaDTO(
+        consulta_id=consulta_id,
+        medico_id=medico_id,
+        data_hora=datetime.fromisoformat(data_hora_str),
+    )
 
 
 @app.post(
