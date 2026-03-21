@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import date, datetime
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import get_db, with_connection
@@ -22,6 +22,8 @@ from .schemas import (
     ConsultaAgendadaDTO,
     PacienteCreate,
     PacienteCreatedDTO,
+    ConsultaPendenteDeConfirmacaoDTO,
+    ConsultaStatusSecretariaRequest,
 )
 from .startup_sql import run_startup_sql
 
@@ -290,3 +292,56 @@ def get_consultas_visao_medico(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"{type(e).__name__}: {e}",
         ) from e
+
+@app.get(
+    "/consultas/pendentes-de-confirmacao",
+    response_model=list[ConsultaPendenteDeConfirmacaoDTO],
+)
+def get_consultas_pendentes_de_confirmacao(
+    repo: ConsultaRepository = Depends(get_consulta_repository),
+) -> list[ConsultaPendenteDeConfirmacaoDTO]:
+    consultas = repo.get_consultas_pendentes_de_confirmacao()
+    return [
+        ConsultaPendenteDeConfirmacaoDTO(
+            consulta_id=c["consulta_id"],
+            paciente_nome=c["paciente_nome"],
+            medico_nome=c["medico_nome"],
+            data_hora=c["data_hora"],
+            status=c["status"],
+        )
+        for c in consultas
+    ]
+
+
+@app.patch(
+    "/consultas/{consulta_id}/status",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def patch_consulta_status_secretaria(
+    consulta_id: int,
+    body: ConsultaStatusSecretariaRequest,
+    conn=Depends(get_db),
+    repo: ConsultaRepository = Depends(get_consulta_repository),
+) -> Response:
+    try:
+        conn.execute("BEGIN")
+        ok = repo.update_consulta_status_secretaria(
+            consulta_id=consulta_id,
+            novo_status=body.status,
+        )
+        if not ok:
+            conn.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Consulta não encontrada ou já processada.",
+            )
+        conn.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__}: {e}",
+        ) from e
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

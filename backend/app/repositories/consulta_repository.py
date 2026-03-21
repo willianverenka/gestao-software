@@ -1,5 +1,5 @@
-from datetime import date
-from typing import Dict, List, Optional, Set, TypedDict
+from datetime import date, datetime
+from typing import Dict, List, Literal, Optional, Set, TypedDict
 
 from .base import BaseRepository
 
@@ -9,6 +9,12 @@ class ConsultaVisaoMedicoRow(TypedDict):
     data_hora: str
     paciente_nome: str
 
+class ConsultaPendenteDeConfirmacaoRow(TypedDict):
+    consulta_id: int
+    paciente_nome: str
+    medico_nome: str
+    data_hora: datetime
+    status: str
 
 class ConsultaRepository(BaseRepository):
     def get_consultas_visao_medico(
@@ -140,3 +146,50 @@ class ConsultaRepository(BaseRepository):
                 return medico_id
         return None
 
+    def get_consultas_pendentes_de_confirmacao(
+            self,
+        ) -> List[ConsultaPendenteDeConfirmacaoRow]:
+            cursor = self.conn.cursor()
+            cursor.execute(
+                f"""
+                SELECT 
+                    c.consulta_id, 
+                    pe_paciente.nome AS paciente_nome, 
+                    pe_medico.nome AS medico_nome, 
+                    c.data_hora, 
+                    c.status
+                FROM consultas c
+                JOIN pacientes p ON c.paciente_id = p.paciente_id
+                JOIN pessoas pe_paciente ON p.pessoa_id = pe_paciente.pessoa_id
+                JOIN funcionarios f ON c.medico_id = f.funcionario_id
+                JOIN pessoas pe_medico ON f.pessoa_id = pe_medico.pessoa_id
+                WHERE c.status = 'agendada'
+                """,
+            )
+            rows = cursor.fetchall()
+
+            consultas = [ConsultaPendenteDeConfirmacaoRow(
+                consulta_id=int(row[0]),
+                paciente_nome=str(row[1]),
+                medico_nome=str(row[2]),
+                data_hora=datetime.fromisoformat(str(row[3])),
+                status=str(row[4]),
+            ) for row in rows]
+
+            return consultas
+
+    def update_consulta_status_secretaria(
+        self,
+        consulta_id: int,
+        novo_status: Literal["confirmada", "cancelada"],
+    ) -> bool:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            UPDATE consultas
+            SET status = ?
+            WHERE consulta_id = ? AND status = 'agendada'
+            """,
+            (novo_status, consulta_id),
+        )
+        return cursor.rowcount == 1

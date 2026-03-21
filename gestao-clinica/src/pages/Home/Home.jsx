@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Users, Activity } from 'lucide-react'; 
+import { UserPlus, Users, Activity, CalendarCheck } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
 const Home = () => {
@@ -40,6 +40,22 @@ const Home = () => {
           <h3 className="text-xl font-semibold mb-2">Agendar consulta</h3>
           <p className="text-slate-500 text-sm mb-4">Visualize horários disponíveis e marque sua consulta.</p>
           <Button variant="outline" className="w-full">Acessar Calendário</Button>
+        </div>
+
+        <div
+          className="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          onClick={() => navigate('/confirmacao-consultas')}
+        >
+          <div className="w-12 h-12 bg-violet-100 rounded-lg flex items-center justify-center mb-4">
+            <CalendarCheck className="text-violet-600" />
+          </div>
+          <h3 className="text-xl font-semibold mb-2">Confirmar consultas</h3>
+          <p className="text-slate-500 text-sm mb-4">
+            Confirme ou cancele solicitações de consulta pendentes.
+          </p>
+          <Button variant="outline" className="w-full">
+            Abrir confirmações
+          </Button>
         </div>
       </div>
     </div>

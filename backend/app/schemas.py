@@ -92,3 +92,13 @@ class ConsultaVisaoMedicoDTO(BaseModel):
 
 ConsultaVisaoMedicoList = List[ConsultaVisaoMedicoDTO]
 
+class ConsultaPendenteDeConfirmacaoDTO(BaseModel):
+    consulta_id: int
+    paciente_nome: str
+    medico_nome: str
+    data_hora: datetime
+    status: Literal["agendada", "confirmada", "cancelada"]
+
+
+class ConsultaStatusSecretariaRequest(BaseModel):
+    status: Literal["confirmada", "cancelada"]
