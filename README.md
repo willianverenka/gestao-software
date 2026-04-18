@@ -9,7 +9,7 @@ O objetivo da sprint é iniciar o projeto com o setup de um ambiente de desenvol
 
 ## Estrutura da equipe SPRINT 1:
 - Willian Verenka – PO e Desenvolvedor back-end
-- Théo Zimmerman – SM e Desenvolvedor front-end
+- Théo Zimmermann – SM e Desenvolvedor front-end
 - Gabriel Lovato – Desenvolvedor front-end
 - João Guilherme Rogante e João Vitor Sitta – Desenvolvedores back-end
 
@@ -26,4 +26,13 @@ O sistema permitirá que pacientes visualizem, em tempo real, os horários dispo
 
 https://fei-gestao-software.atlassian.net?continue=https%3A%2F%2Ffei-gestao-software.atlassian.net%2Fwelcome%2Fsoftware&atlOrigin=eyJpIjoiNjFmYTcwNjM5YjkxNDUxZmE1OGNlZWQ4YTY0OGIyZjciLCJwIjoiaiJ9
 
-teste push direto na main 2
+# Sprint 2
+
+Kanban da sprint
+<img width="850" height="562" alt="image" src="https://github.com/user-attachments/assets/04b5372b-be29-48b6-85c2-e69d75031beb" />
+
+Kanban riscos
+
+<img width="961" height="562" alt="image" src="https://github.com/user-attachments/assets/3b882ab5-5e38-4dc7-acc1-323d72e6da63" />
+
+
