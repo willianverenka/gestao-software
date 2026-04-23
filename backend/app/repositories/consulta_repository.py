@@ -9,12 +9,22 @@ class ConsultaVisaoMedicoRow(TypedDict):
     data_hora: str
     paciente_nome: str
 
+
 class ConsultaPendenteDeConfirmacaoRow(TypedDict):
     consulta_id: int
     paciente_nome: str
     medico_nome: str
     data_hora: datetime
     status: str
+
+
+class ConsultaNotificacaoPacienteRow(TypedDict):
+    consulta_id: int
+    paciente_nome: str
+    medico_nome: str
+    data_hora: datetime
+    status: str
+
 
 class ConsultaRepository(BaseRepository):
     def get_consultas_visao_medico(
@@ -147,36 +157,74 @@ class ConsultaRepository(BaseRepository):
         return None
 
     def get_consultas_pendentes_de_confirmacao(
-            self,
-        ) -> List[ConsultaPendenteDeConfirmacaoRow]:
-            cursor = self.conn.cursor()
-            cursor.execute(
-                f"""
-                SELECT 
-                    c.consulta_id, 
-                    pe_paciente.nome AS paciente_nome, 
-                    pe_medico.nome AS medico_nome, 
-                    c.data_hora, 
-                    c.status
-                FROM consultas c
-                JOIN pacientes p ON c.paciente_id = p.paciente_id
-                JOIN pessoas pe_paciente ON p.pessoa_id = pe_paciente.pessoa_id
-                JOIN funcionarios f ON c.medico_id = f.funcionario_id
-                JOIN pessoas pe_medico ON f.pessoa_id = pe_medico.pessoa_id
-                WHERE c.status = 'agendada'
-                """,
-            )
-            rows = cursor.fetchall()
+        self,
+    ) -> List[ConsultaPendenteDeConfirmacaoRow]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                c.consulta_id,
+                pe_paciente.nome AS paciente_nome,
+                pe_medico.nome AS medico_nome,
+                c.data_hora,
+                c.status
+            FROM consultas c
+            JOIN pacientes p ON c.paciente_id = p.paciente_id
+            JOIN pessoas pe_paciente ON p.pessoa_id = pe_paciente.pessoa_id
+            JOIN funcionarios f ON c.medico_id = f.funcionario_id
+            JOIN pessoas pe_medico ON f.pessoa_id = pe_medico.pessoa_id
+            WHERE c.status = 'agendada'
+            """,
+        )
+        rows = cursor.fetchall()
 
-            consultas = [ConsultaPendenteDeConfirmacaoRow(
+        consultas = [
+            ConsultaPendenteDeConfirmacaoRow(
                 consulta_id=int(row[0]),
                 paciente_nome=str(row[1]),
                 medico_nome=str(row[2]),
                 data_hora=datetime.fromisoformat(str(row[3])),
                 status=str(row[4]),
-            ) for row in rows]
+            )
+            for row in rows
+        ]
 
-            return consultas
+        return consultas
+
+    def get_dados_notificacao_paciente(
+        self,
+        consulta_id: int,
+    ) -> Optional[ConsultaNotificacaoPacienteRow]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                c.consulta_id,
+                pe_paciente.nome AS paciente_nome,
+                pe_medico.nome AS medico_nome,
+                c.data_hora,
+                c.status
+            FROM consultas c
+            JOIN pacientes p ON c.paciente_id = p.paciente_id
+            JOIN pessoas pe_paciente ON p.pessoa_id = pe_paciente.pessoa_id
+            JOIN funcionarios f ON c.medico_id = f.funcionario_id
+            JOIN pessoas pe_medico ON f.pessoa_id = pe_medico.pessoa_id
+            WHERE c.consulta_id = ?
+            """,
+            (consulta_id,),
+        )
+        row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return ConsultaNotificacaoPacienteRow(
+            consulta_id=int(row[0]),
+            paciente_nome=str(row[1]),
+            medico_nome=str(row[2]),
+            data_hora=datetime.fromisoformat(str(row[3])),
+            status=str(row[4]),
+        )
 
     def update_consulta_status_secretaria(
         self,
