@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Users, Activity, CalendarCheck } from 'lucide-react';
+import { UserPlus, Users, Activity, CalendarCheck, ClipboardList } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
 const Home = () => {
@@ -55,6 +55,22 @@ const Home = () => {
           </p>
           <Button variant="outline" className="w-full">
             Abrir confirmações
+          </Button>
+        </div>
+
+        <div
+          className="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer md:col-span-2"
+          onClick={() => navigate('/agenda-medico')}
+        >
+          <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
+            <ClipboardList className="text-indigo-600" />
+          </div>
+          <h3 className="text-xl font-semibold mb-2">Minha Agenda</h3>
+          <p className="text-slate-500 text-sm mb-4">
+            Visualize todas as consultas marcadas na sua agenda, filtradas por data.
+          </p>
+          <Button variant="outline" className="w-full">
+            Ver Agenda
           </Button>
         </div>
       </div>
