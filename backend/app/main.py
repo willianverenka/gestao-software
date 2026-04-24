@@ -1,52 +1,25 @@
-import sqlite3
-from datetime import date, datetime
+from datetime import date
 
-from fastapi import Depends, FastAPI, HTTPException, Response, status
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI, HTTPException, status
+from typing import List
 
 from .db import get_db, with_connection
-from .repositories import (
-    ConsultaRepository,
-    ConvenioRepository,
-    EspecialidadeRepository,
-    FuncionarioRepository,
-    PacienteRepository,
-    PessoaRepository,
-)
+from .repositories import ConsultaRepository, PessoaRepository, FuncionarioRepository, PacienteRepository
 from .schemas import (
+    ConsultaCreateDTO,
+    ConsultaCreatedDTO,
     ConsultaVisaoMedicoDTO,
-    ConsultasDisponiveisResponse,
-    FuncionarioCreate,
+    FuncionarioCreateDTO,
     FuncionarioCreatedDTO,
-    ConsultaAgendarRequest,
-    ConsultaAgendadaDTO,
-    PacienteCreate,
-    PacienteCreatedDTO,
-    ConsultaPendenteDeConfirmacaoDTO,
-    ConsultaStatusSecretariaRequest,
+    HorarioDTO,
+    HorarioStatusDTO,
+    HorariosDisponiveisRequest,
+    PessoaCreateDTO,
+    PessoaCreatedDTO,
 )
 from .startup_sql import run_startup_sql
 
-CARGO_FRONT_TO_DB = {
-    "recepcionista": "secretaria",
-    "admin": "backoffice",
-    "medico": "medico",
-}
-
 app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:4173",
-        "http://127.0.0.1:4173",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.on_event("startup")
@@ -69,203 +42,14 @@ def db_check(conn=Depends(get_db)):
 def get_consulta_repository(conn=Depends(get_db)) -> ConsultaRepository:
     return ConsultaRepository(conn)
 
-
 def get_pessoa_repository(conn=Depends(get_db)) -> PessoaRepository:
     return PessoaRepository(conn)
-
 
 def get_funcionario_repository(conn=Depends(get_db)) -> FuncionarioRepository:
     return FuncionarioRepository(conn)
 
-
-def get_especialidade_repository(conn=Depends(get_db)) -> EspecialidadeRepository:
-    return EspecialidadeRepository(conn)
-
-
-def get_convenio_repository(conn=Depends(get_db)) -> ConvenioRepository:
-    return ConvenioRepository(conn)
-
-
 def get_paciente_repository(conn=Depends(get_db)) -> PacienteRepository:
     return PacienteRepository(conn)
-
-
-@app.get(
-    "/consultas/disponiveis",
-    response_model=ConsultasDisponiveisResponse,
-)
-def get_consultas_disponiveis(
-    data: date,
-    especialidade: str,
-    repo: ConsultaRepository = Depends(get_consulta_repository),
-) -> ConsultasDisponiveisResponse:
-    horarios = repo.get_horarios_disponiveis_por_especialidade(
-        especialidade=especialidade,
-        data=data,
-    )
-    return ConsultasDisponiveisResponse(horarios=horarios)
-
-
-@app.post(
-    "/consultas",
-    response_model=ConsultaAgendadaDTO,
-    status_code=status.HTTP_201_CREATED,
-)
-def agendar_consulta(
-    body: ConsultaAgendarRequest,
-    conn=Depends(get_db),
-    repo: ConsultaRepository = Depends(get_consulta_repository),
-) -> ConsultaAgendadaDTO:
-    data_hora_str = f"{body.data.isoformat()} {body.hora}:00"
-    try:
-        conn.execute("BEGIN")
-        medico_id = repo.get_primeiro_medico_disponivel(
-            especialidade=body.especialidade,
-            data=body.data,
-            hora=body.hora,
-        )
-        if medico_id is None:
-            conn.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Nenhum médico disponível para o horário informado.",
-            )
-
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO consultas (paciente_id, medico_id, data_hora, status)
-            VALUES (?, ?, ?, ?)
-            """,
-            (body.paciente_id, medico_id, data_hora_str, "agendada"),
-        )
-        consulta_id = int(cursor.lastrowid)
-        conn.commit()
-    except HTTPException as e:
-        conn.rollback()
-        raise e
-    except sqlite3.IntegrityError as e:
-        conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"{type(e).__name__}: {e}",
-        ) from e
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"{type(e).__name__}: {e}",
-        ) from e
-
-    return ConsultaAgendadaDTO(
-        consulta_id=consulta_id,
-        medico_id=medico_id,
-        data_hora=datetime.fromisoformat(data_hora_str),
-    )
-
-
-@app.post(
-    "/pacientes",
-    response_model=PacienteCreatedDTO,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_paciente(
-    body: PacienteCreate,
-    conn=Depends(get_db),
-    pessoa_repo: PessoaRepository = Depends(get_pessoa_repository),
-    paciente_repo: PacienteRepository = Depends(get_paciente_repository),
-    convenio_repo: ConvenioRepository = Depends(get_convenio_repository),
-) -> PacienteCreatedDTO:
-    cpf_digits = "".join(c for c in body.cpf if c.isdigit())
-    if body.convenio == "particular":
-        convenio_id = None
-    else:
-        convenio_id = convenio_repo.get_id_by_codigo(body.convenio)
-        if convenio_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Convênio inválido ou não cadastrado.",
-            )
-    try:
-        conn.execute("BEGIN")
-        pessoa_id = pessoa_repo.insert(
-            nome=body.nome.strip(),
-            cpf=cpf_digits,
-            email=body.email,
-            telefone=body.telefone,
-        )
-        paciente_id = paciente_repo.insert(
-            pessoa_id=pessoa_id,
-            convenio_id=convenio_id,
-        )
-        conn.commit()
-    except sqlite3.IntegrityError as e:
-        conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"{type(e).__name__}: {e}",
-        ) from e
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"{type(e).__name__}: {e}",
-        ) from e
-    return PacienteCreatedDTO(paciente_id=paciente_id, pessoa_id=pessoa_id)
-
-
-@app.post(
-    "/funcionarios",
-    response_model=FuncionarioCreatedDTO,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_funcionario(
-    body: FuncionarioCreate,
-    conn=Depends(get_db),
-    pessoa_repo: PessoaRepository = Depends(get_pessoa_repository),
-    func_repo: FuncionarioRepository = Depends(get_funcionario_repository),
-    esp_repo: EspecialidadeRepository = Depends(get_especialidade_repository),
-) -> FuncionarioCreatedDTO:
-    if body.cargo == "medico" and body.especialidade:
-        if not esp_repo.codigo_exists(body.especialidade):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Especialidade inválida.",
-            )
-    cpf_digits = "".join(c for c in body.cpf if c.isdigit())
-    cargo_db = CARGO_FRONT_TO_DB[body.cargo]
-    crm_val = (body.crm or "").strip() or None
-    try:
-        conn.execute("BEGIN")
-        pessoa_id = pessoa_repo.insert(
-            nome=body.nome.strip(),
-            cpf=cpf_digits,
-            email=body.email.strip(),
-            telefone=body.telefone,
-        )
-        funcionario_id = func_repo.insert(
-            pessoa_id=pessoa_id,
-            cargo=cargo_db,
-            crm=crm_val,
-            especialidade=body.especialidade,
-        )
-        conn.commit()
-    except sqlite3.IntegrityError as e:
-        conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"{type(e).__name__}: {e}",
-        ) from e
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"{type(e).__name__}: {e}",
-        ) from e
-    return FuncionarioCreatedDTO(
-        funcionario_id=funcionario_id,
-        pessoa_id=pessoa_id,
-    )
 
 
 @app.get(
@@ -275,73 +59,178 @@ def create_funcionario(
 def get_consultas_visao_medico(
     medico_id: int,
     data: date,
+    solicitante_id: int,
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> list[ConsultaVisaoMedicoDTO]:
-    try:
-        consultas = repo.get_consultas_visao_medico(medico_id=medico_id, data=data)
-        return [
-            ConsultaVisaoMedicoDTO(
-                consulta_id=c["consulta_id"],
-                data_hora=c["data_hora"],
-                paciente_nome=c["paciente_nome"],
-            )
-            for c in consultas
-        ]
-    except Exception as e:
+    if solicitante_id != medico_id:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"{type(e).__name__}: {e}",
-        ) from e
-
-@app.get(
-    "/consultas/pendentes-de-confirmacao",
-    response_model=list[ConsultaPendenteDeConfirmacaoDTO],
-)
-def get_consultas_pendentes_de_confirmacao(
-    repo: ConsultaRepository = Depends(get_consulta_repository),
-) -> list[ConsultaPendenteDeConfirmacaoDTO]:
-    consultas = repo.get_consultas_pendentes_de_confirmacao()
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado. Médico só pode visualizar a própria agenda.",
+        )
+    consultas = repo.get_consultas_visao_medico(medico_id=medico_id, data=data)
     return [
-        ConsultaPendenteDeConfirmacaoDTO(
+        ConsultaVisaoMedicoDTO(
             consulta_id=c["consulta_id"],
-            paciente_nome=c["paciente_nome"],
-            medico_nome=c["medico_nome"],
             data_hora=c["data_hora"],
-            status=c["status"],
+            paciente_nome=c["paciente_nome"],
         )
         for c in consultas
     ]
 
 
-@app.patch(
-    "/consultas/{consulta_id}/status",
-    status_code=status.HTTP_204_NO_CONTENT,
+@app.post(
+    "/consultas",
+    response_model=ConsultaCreatedDTO,
+    status_code=status.HTTP_201_CREATED,
 )
-def patch_consulta_status_secretaria(
-    consulta_id: int,
-    body: ConsultaStatusSecretariaRequest,
-    conn=Depends(get_db),
+def criar_consulta(
+    body: ConsultaCreateDTO,
     repo: ConsultaRepository = Depends(get_consulta_repository),
-) -> Response:
-    try:
-        conn.execute("BEGIN")
-        ok = repo.update_consulta_status_secretaria(
-            consulta_id=consulta_id,
-            novo_status=body.status,
-        )
-        if not ok:
-            conn.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Consulta não encontrada ou já processada.",
-            )
-        conn.commit()
-    except HTTPException:
-        raise
-    except Exception as e:
-        conn.rollback()
+) -> ConsultaCreatedDTO:
+    if not repo.paciente_existe(body.paciente_id):
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"{type(e).__name__}: {e}",
-        ) from e
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Paciente com id {body.paciente_id} não encontrado.",
+        )
+
+    if not repo.medico_existe(body.medico_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Médico com id {body.medico_id} não encontrado.",
+        )
+
+    if repo.horario_ocupado(medico_id=body.medico_id, data_hora=body.data_hora):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Horário {body.data_hora} já está ocupado para este médico.",
+        )
+
+    nova = repo.create_consulta(
+        paciente_id=body.paciente_id,
+        medico_id=body.medico_id,
+        data_hora=body.data_hora,
+        status=body.status,
+    )
+    return ConsultaCreatedDTO(**nova)
+
+
+@app.post(
+    "/medicos/{medico_id}/horarios-disponiveis",
+    response_model=list[HorarioStatusDTO],
+)
+def verificar_horarios_disponiveis(
+    medico_id: int,
+    body: HorariosDisponiveisRequest,
+    repo: ConsultaRepository = Depends(get_consulta_repository),
+) -> list[HorarioStatusDTO]:
+    if not repo.medico_existe(medico_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Médico com id {medico_id} não encontrado.",
+        )
+
+    return [
+        HorarioStatusDTO(
+            data_hora=horario,
+            disponivel=not repo.horario_ocupado(medico_id=medico_id, data_hora=horario),
+        )
+        for horario in body.horarios
+    ]
+
+
+@app.post(
+    "/funcionarios",
+    response_model=FuncionarioCreatedDTO,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_funcionario(
+    body: FuncionarioCreateDTO,
+    repo: FuncionarioRepository = Depends(get_funcionario_repository),
+) -> FuncionarioCreatedDTO:
+    if not repo.pessoa_existe(body.pessoa_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pessoa com id {body.pessoa_id} não encontrada.",
+        )
+
+    if body.cargo == "medico" and not body.crm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CRM é obrigatório para médicos.",
+        )
+
+    if body.cargo != "medico" and body.crm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CRM é permitido apenas para médicos.",
+        )
+
+    funcionario = repo.create_funcionario(body)
+    return FuncionarioCreatedDTO(**funcionario)
+
+
+@app.post(
+    "/pessoas",
+    response_model=PessoaCreatedDTO,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_pessoa(
+    body: PessoaCreateDTO,
+    repo: PessoaRepository = Depends(get_pessoa_repository),
+) -> PessoaCreatedDTO:
+    if repo.cpf_exists(body.cpf):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"CPF {body.cpf} já cadastrado para outra pessoa.",
+        )
+
+    idade = repo.calcular_idade(body.data_nascimento)
+    if idade < 18:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pessoa deve ser maior de 18 anos.",
+        )
+
+    pessoa = repo.create_pessoa(body)
+    return PessoaCreatedDTO(**pessoa)
+
+
+@app.post(
+    "/pacientes",
+    response_model=PessoaCreatedDTO,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_paciente(
+    body: PessoaCreateDTO,
+    pessoa_repo: PessoaRepository = Depends(get_pessoa_repository),
+    paciente_repo: PacienteRepository = Depends(get_paciente_repository),
+) -> PessoaCreatedDTO:
+    if pessoa_repo.cpf_exists(body.cpf):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"CPF {body.cpf} já cadastrado.",
+        )
+
+    idade = pessoa_repo.calcular_idade(body.data_nascimento)
+    if idade < 18:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Paciente deve ser maior de 18 anos.",
+        )
+
+    pessoa = pessoa_repo.create_pessoa(body)
+    paciente_repo.criar_paciente(pessoa_id=pessoa["pessoa_id"])
+    return PessoaCreatedDTO(**pessoa)
+
+
+@app.get(
+    "/horarios",
+    response_model=List[HorarioDTO],
+)
+def listar_horarios_disponiveis(
+    especialidade: str,
+    data: date,
+    repo: ConsultaRepository = Depends(get_consulta_repository),
+):
+    horarios = repo.listar_horarios_disponiveis(especialidade, data)
+    return [HorarioDTO(**h) for h in horarios]

@@ -1,22 +1,22 @@
-from __future__ import annotations
-
 from .base import BaseRepository
 
 
 class FuncionarioRepository(BaseRepository):
-    def insert(
-        self,
-        pessoa_id: int,
-        cargo: str,
-        crm: str | None,
-        especialidade: str | None,
-    ) -> int:
-        cur = self.conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO funcionarios (pessoa_id, cargo, crm, especialidade)
-            VALUES (?, ?, ?, ?)
-            """,
-            (pessoa_id, cargo, crm, especialidade),
+    def pessoa_existe(self, pessoa_id: int) -> bool:
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT 1 FROM pessoas WHERE pessoa_id = ?", (pessoa_id,))
+        return cursor.fetchone() is not None
+
+    def create_funcionario(self, funcionario) -> dict:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO funcionarios (pessoa_id, cargo) VALUES (?, ?)",
+            (funcionario.pessoa_id, funcionario.cargo),
         )
-        return int(cur.lastrowid)
+        self.conn.commit()
+        return {
+            "funcionario_id": cursor.lastrowid,
+            "pessoa_id": funcionario.pessoa_id,
+            "cargo": funcionario.cargo,
+            "crm": funcionario.crm,
+        }
