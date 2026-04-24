@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from typing import List
 
 from .db import get_db, with_connection
-from .repositories import ConsultaRepository, PessoaRepository
+from .repositories import ConsultaRepository, PessoaRepository, FuncionarioRepository, PacienteRepository
 from .schemas import (
     ConsultaCreateDTO,
     ConsultaCreatedDTO,
@@ -42,32 +42,14 @@ def db_check(conn=Depends(get_db)):
 def get_consulta_repository(conn=Depends(get_db)) -> ConsultaRepository:
     return ConsultaRepository(conn)
 
+def get_pessoa_repository(conn=Depends(get_db)) -> PessoaRepository:
+    return PessoaRepository(conn)
 
-def validar_acesso_medico(
-    repo: ConsultaRepository,
-    medico_id: int,
-    solicitante_id: int,
-) -> None:
-    cursor = repo.conn.cursor()
-    cursor.execute(
-        """
-        SELECT 1
-        FROM funcionarios
-        WHERE funcionario_id = ? AND cargo = 'medico'
-        """,
-        (medico_id,),
-    )
-    if cursor.fetchone() is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Médico com id {medico_id} não encontrado.",
-        )
+def get_funcionario_repository(conn=Depends(get_db)) -> FuncionarioRepository:
+    return FuncionarioRepository(conn)
 
-    if solicitante_id != medico_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acesso negado. Médico só pode visualizar a própria agenda.",
-        )
+def get_paciente_repository(conn=Depends(get_db)) -> PacienteRepository:
+    return PacienteRepository(conn)
 
 
 @app.get(
@@ -80,41 +62,20 @@ def get_consultas_visao_medico(
     solicitante_id: int,
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> list[ConsultaVisaoMedicoDTO]:
-    validar_acesso_medico(
-        repo=repo,
-        medico_id=medico_id,
-        solicitante_id=solicitante_id,
-    )
-
-    consultas = repo.get_consultas_visao_medico(
-        medico_id=medico_id,
-        data=data,
-    )
-
+    if solicitante_id != medico_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado. Médico só pode visualizar a própria agenda.",
+        )
+    consultas = repo.get_consultas_visao_medico(medico_id=medico_id, data=data)
     return [
         ConsultaVisaoMedicoDTO(
-            consulta_id=consulta["consulta_id"],
-            data_hora=consulta["data_hora"],
-            paciente_nome=consulta["paciente_nome"],
+            consulta_id=c["consulta_id"],
+            data_hora=c["data_hora"],
+            paciente_nome=c["paciente_nome"],
         )
-        for consulta in consultas
+        for c in consultas
     ]
-
-
-@app.get("/consultas/{consulta_id}/notificacao")
-def get_notificacao_paciente(
-    consulta_id: int,
-    repo: ConsultaRepository = Depends(get_consulta_repository),
-):
-    dados = repo.get_dados_notificacao_paciente(consulta_id)
-
-    if dados is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Consulta com id {consulta_id} não encontrada.",
-        )
-
-    return dados
 
 
 @app.post(
@@ -126,20 +87,13 @@ def criar_consulta(
     body: ConsultaCreateDTO,
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> ConsultaCreatedDTO:
-    cursor = repo.conn.cursor()
-
-    cursor.execute("SELECT 1 FROM pacientes WHERE paciente_id = ?", (body.paciente_id,))
-    if cursor.fetchone() is None:
+    if not repo.paciente_existe(body.paciente_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Paciente com id {body.paciente_id} não encontrado.",
         )
 
-    cursor.execute(
-        "SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'",
-        (body.medico_id,),
-    )
-    if cursor.fetchone() is None:
+    if not repo.medico_existe(body.medico_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Médico com id {body.medico_id} não encontrado.",
@@ -169,12 +123,7 @@ def verificar_horarios_disponiveis(
     body: HorariosDisponiveisRequest,
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> list[HorarioStatusDTO]:
-    cursor = repo.conn.cursor()
-    cursor.execute(
-        "SELECT 1 FROM funcionarios WHERE funcionario_id = ? AND cargo = 'medico'",
-        (medico_id,),
-    )
-    if cursor.fetchone() is None:
+    if not repo.medico_existe(medico_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Médico com id {medico_id} não encontrado.",
@@ -196,12 +145,9 @@ def verificar_horarios_disponiveis(
 )
 def criar_funcionario(
     body: FuncionarioCreateDTO,
-    conn=Depends(get_db),
+    repo: FuncionarioRepository = Depends(get_funcionario_repository),
 ) -> FuncionarioCreatedDTO:
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT 1 FROM pessoas WHERE pessoa_id = ?", (body.pessoa_id,))
-    if cursor.fetchone() is None:
+    if not repo.pessoa_existe(body.pessoa_id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Pessoa com id {body.pessoa_id} não encontrada.",
@@ -219,19 +165,8 @@ def criar_funcionario(
             detail="CRM é permitido apenas para médicos.",
         )
 
-    cursor.execute(
-        "INSERT INTO funcionarios (pessoa_id, cargo) VALUES (?, ?)",
-        (body.pessoa_id, body.cargo),
-    )
-    conn.commit()
-    funcionario_id = cursor.lastrowid
-
-    return FuncionarioCreatedDTO(
-        funcionario_id=funcionario_id,
-        pessoa_id=body.pessoa_id,
-        cargo=body.cargo,
-        crm=body.crm,
-    )
+    funcionario = repo.create_funcionario(body)
+    return FuncionarioCreatedDTO(**funcionario)
 
 
 @app.post(
@@ -241,10 +176,8 @@ def criar_funcionario(
 )
 def criar_pessoa(
     body: PessoaCreateDTO,
-    conn=Depends(get_db),
+    repo: PessoaRepository = Depends(get_pessoa_repository),
 ) -> PessoaCreatedDTO:
-    repo = PessoaRepository(conn)
-
     if repo.cpf_exists(body.cpf):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -269,33 +202,24 @@ def criar_pessoa(
 )
 def criar_paciente(
     body: PessoaCreateDTO,
-    conn=Depends(get_db),
+    pessoa_repo: PessoaRepository = Depends(get_pessoa_repository),
+    paciente_repo: PacienteRepository = Depends(get_paciente_repository),
 ) -> PessoaCreatedDTO:
-    repo = PessoaRepository(conn)
-
-    if repo.cpf_exists(body.cpf):
+    if pessoa_repo.cpf_exists(body.cpf):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"CPF {body.cpf} já cadastrado.",
         )
 
-    idade = repo.calcular_idade(body.data_nascimento)
+    idade = pessoa_repo.calcular_idade(body.data_nascimento)
     if idade < 18:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Paciente deve ser maior de 18 anos.",
         )
 
-    pessoa = repo.create_pessoa(body)
-    pessoa_id = pessoa["pessoa_id"]
-
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO pacientes (pessoa_id) VALUES (?)",
-        (pessoa_id,),
-    )
-    conn.commit()
-
+    pessoa = pessoa_repo.create_pessoa(body)
+    paciente_repo.criar_paciente(pessoa_id=pessoa["pessoa_id"])
     return PessoaCreatedDTO(**pessoa)
 
 
@@ -306,8 +230,7 @@ def criar_paciente(
 def listar_horarios_disponiveis(
     especialidade: str,
     data: date,
-    conn=Depends(get_db),
+    repo: ConsultaRepository = Depends(get_consulta_repository),
 ):
-    repo = ConsultaRepository(conn)
     horarios = repo.listar_horarios_disponiveis(especialidade, data)
     return [HorarioDTO(**h) for h in horarios]
