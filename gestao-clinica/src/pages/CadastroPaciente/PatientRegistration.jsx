@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DateOfBirthPicker } from "@/components/DateOfBirthPicker";
 
 const PatientRegistration = () => {
   const navigate = useNavigate();
@@ -137,7 +138,11 @@ const PatientRegistration = () => {
 
           <div className="space-y-2">
             <Label htmlFor="dataNascimento">Data de Nascimento</Label>
-            <Input id="dataNascimento" name="dataNascimento" type="date" value={formData.dataNascimento} onChange={handleChange} />
+            <DateOfBirthPicker
+              id="dataNascimento"
+              value={formData.dataNascimento}
+              onChange={(v) => handleSelectChange("dataNascimento", v)}
+            />
           </div>
 
           <div className="space-y-2">
