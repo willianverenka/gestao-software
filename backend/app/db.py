@@ -5,11 +5,17 @@ from contextlib import contextmanager
 DATABASE_PATH = "./data/app.db"
 
 
+def _new_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+
 @contextmanager
 def with_connection():
     """Context manager para obter uma conexão (ex.: uso no startup)."""
-    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn = _new_connection()
     try:
         yield conn
     finally:
@@ -18,8 +24,7 @@ def with_connection():
 
 def get_db():
     """Generator que fornece uma conexão sqlite3 por request (FastAPI Depends)."""
-    conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn = _new_connection()
     try:
         yield conn
     finally:

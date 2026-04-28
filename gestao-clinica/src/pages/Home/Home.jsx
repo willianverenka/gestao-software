@@ -1,65 +1,111 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Users, Activity, CalendarCheck } from 'lucide-react';
-import { Button } from "@/components/ui/button";
+import { CalendarCheck, Stethoscope, UserPlus, ArrowRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/AuthContext';
 
-const Home = () => {
-  const navigate = useNavigate();
+const ROLE_LABELS = {
+  secretaria: 'Secretária',
+  medico: 'Médico',
+  paciente: 'Paciente',
+};
+
+const ROLE_SECTIONS = {
+  secretaria: [
+    {
+      title: 'Cadastro de funcionários',
+      description: 'Registre médicos e secretárias com login e papel definidos.',
+      icon: UserPlus,
+      action: '/cadastro-funcionario',
+      button: 'Cadastrar funcionário',
+      tone: 'bg-amber-50 text-amber-700 border-amber-100',
+    },
+    {
+      title: 'Consultas pendentes',
+      description: 'Confirme ou cancele solicitações que ainda estão em aberto.',
+      icon: CalendarCheck,
+      action: '/confirmacao-consultas',
+      button: 'Ver pendências',
+      tone: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    },
+  ],
+  paciente: [
+    {
+      title: 'Agendar consulta',
+      description: 'Escolha especialidade, data e horário.',
+      icon: Stethoscope,
+      action: '/calendario',
+      button: 'Ir para o agendamento',
+      tone: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+    },
+  ],
+  medico: [
+    {
+      title: 'Agenda médica',
+      description: 'Espaço reservado para a agenda e as rotinas do médico.',
+      icon: Stethoscope,
+      tone: 'bg-blue-50 text-blue-700 border-blue-100',
+    },
+  ],
+};
+
+function RoleCard({ item, onNavigate }) {
+  const Icon = item.icon;
 
   return (
-    <div className="max-w-4xl mx-auto mt-12 p-6">
-      <h1 className="text-3xl font-bold text-slate-800 mb-2">Bem-vindo ao MedSystem</h1>
-      <p className="text-slate-500 mb-8">O que você deseja fazer hoje?</p>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-             onClick={() => navigate('/cadastro-funcionario')}>
-          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-            <UserPlus className="text-blue-600" />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">Funcionários</h3>
-          <p className="text-slate-500 text-sm mb-4">Cadastre novos médicos, recepcionistas ou administradores.</p>
-          <Button variant="outline" className="w-full">Acessar Cadastro</Button>
-        </div>
-
-        <div className="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-             onClick={() => navigate('/pacientes')}>
-          <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
-            <Users className="text-orange-600" />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">Pacientes</h3>
-          <p className="text-slate-500 text-sm mb-4">Registre novos pacientes e gerencie informações de convênio.</p>
-          <Button variant="outline" className="w-full">Acessar Cadastro</Button>
-        </div>
-
-        <div className="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-             onClick={() => navigate('/calendario')}>
-          <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center mb-4">
-            <Activity className="text-emerald-600" />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">Agendar consulta</h3>
-          <p className="text-slate-500 text-sm mb-4">Visualize horários disponíveis e marque sua consulta.</p>
-          <Button variant="outline" className="w-full">Acessar Calendário</Button>
-        </div>
-
-        <div
-          className="p-6 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-          onClick={() => navigate('/confirmacao-consultas')}
-        >
-          <div className="w-12 h-12 bg-violet-100 rounded-lg flex items-center justify-center mb-4">
-            <CalendarCheck className="text-violet-600" />
-          </div>
-          <h3 className="text-xl font-semibold mb-2">Confirmar consultas</h3>
-          <p className="text-slate-500 text-sm mb-4">
-            Confirme ou cancele solicitações de consulta pendentes.
-          </p>
-          <Button variant="outline" className="w-full">
-            Abrir confirmações
-          </Button>
+    <article
+      className={`group rounded-[1.75rem] border p-6 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${item.tone}`}
+    >
+      <div className="flex items-start gap-4">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80 shadow-sm">
+          <Icon className="h-6 w-6" />
         </div>
       </div>
+
+      <h3 className="mt-5 text-xl font-semibold text-slate-900">{item.title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+
+      {item.action ? (
+        <Button
+          variant="outline"
+          className="mt-6 w-full justify-between rounded-2xl border-white/60 bg-white/80"
+          onClick={() => onNavigate(item.action)}
+        >
+          {item.button}
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      ) : null}
+    </article>
+  );
+}
+
+function Home() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const cards = ROLE_SECTIONS[user?.role] || [];
+
+  return (
+    <div className="space-y-8">
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm md:p-10">
+        <Badge variant="outline" className="rounded-full px-3 py-1">
+          {ROLE_LABELS[user?.role] || user?.role}
+        </Badge>
+        <h1 className="mt-5 text-4xl font-semibold leading-tight text-slate-950 md:text-5xl">
+          Olá, {user?.nome?.split(' ')[0] || 'usuário'}.
+        </h1>
+        <p className="mt-4 max-w-2xl text-base leading-7 text-slate-600 md:text-lg">
+          Use as opções abaixo para acessar os fluxos disponíveis para o seu perfil.
+        </p>
+      </section>
+
+      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {cards.map((item) => (
+          <RoleCard key={item.title} item={item} onNavigate={navigate} />
+        ))}
+      </section>
     </div>
   );
-};
+}
 
 export default Home;

@@ -6,14 +6,51 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, model_validator
 
 
+Role = Literal["secretaria", "medico", "paciente"]
+
+
+class AuthLoginRequest(BaseModel):
+    email: str
+    senha: str
+
+    @model_validator(mode="after")
+    def normalize_email(self):
+        self.email = self.email.strip().lower()
+        if not self.email:
+            raise ValueError("E-mail é obrigatório.")
+        if not self.senha:
+            raise ValueError("Senha é obrigatória.")
+        return self
+
+
+class AuthUserDTO(BaseModel):
+    usuario_id: int
+    pessoa_id: int
+    email: str
+    nome: str
+    role: Role
+    paciente_id: Optional[int] = None
+    funcionario_id: Optional[int] = None
+
+
+class AuthLoginResponse(BaseModel):
+    token: str
+    user: AuthUserDTO
+
+
+class AuthMeResponse(BaseModel):
+    user: AuthUserDTO
+
+
 class FuncionarioCreate(BaseModel):
     nome: str
     email: str
     cpf: str
     telefone: Optional[str] = None
-    cargo: Literal["recepcionista", "medico", "admin"]
+    cargo: Literal["secretaria", "recepcionista", "medico", "admin"]
     crm: Optional[str] = None
     especialidade: Optional[str] = None
+    senha: str
 
     @model_validator(mode="after")
     def medico_e_normalizacao(self):
@@ -25,6 +62,11 @@ class FuncionarioCreate(BaseModel):
         else:
             self.crm = None
             self.especialidade = None
+        self.email = self.email.strip().lower()
+        if not self.email:
+            raise ValueError("E-mail é obrigatório.")
+        if not (self.senha or "").strip():
+            raise ValueError("Senha é obrigatória.")
         return self
 
 
@@ -39,12 +81,15 @@ class PacienteCreate(BaseModel):
     cpf: str
     telefone: Optional[str] = None
     convenio: Literal["particular", "unimed", "bradesco", "amil"]
+    senha: str
 
     @model_validator(mode="after")
     def email_nao_vazio(self):
         if not (self.email or "").strip():
             raise ValueError("E-mail é obrigatório.")
-        self.email = self.email.strip()
+        self.email = self.email.strip().lower()
+        if not (self.senha or "").strip():
+            raise ValueError("Senha é obrigatória.")
         return self
 
 
@@ -62,10 +107,10 @@ class ConsultasDisponiveisRequest(BaseModel):
 
 
 class ConsultaAgendarRequest(BaseModel):
-    paciente_id: int
     especialidade: str
     data: date
     hora: str
+    paciente_id: Optional[int] = None
 
     @model_validator(mode="after")
     def validar_hora(self):

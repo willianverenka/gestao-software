@@ -1,11 +1,22 @@
+from __future__ import annotations
+
 import sqlite3
 from datetime import date, datetime
 
-from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 
+from .auth import (
+    create_session_token,
+    hash_password,
+    hash_token,
+    normalize_email,
+    session_expiry,
+    verify_password,
+)
 from .db import get_db, with_connection
 from .repositories import (
+    AuthRepository,
     ConsultaRepository,
     ConvenioRepository,
     EspecialidadeRepository,
@@ -14,22 +25,27 @@ from .repositories import (
     PessoaRepository,
 )
 from .schemas import (
+    AuthLoginRequest,
+    AuthLoginResponse,
+    AuthMeResponse,
+    AuthUserDTO,
+    ConsultaAgendadaDTO,
+    ConsultaAgendarRequest,
+    ConsultaPendenteDeConfirmacaoDTO,
+    ConsultaStatusSecretariaRequest,
     ConsultaVisaoMedicoDTO,
     ConsultasDisponiveisResponse,
     FuncionarioCreate,
     FuncionarioCreatedDTO,
-    ConsultaAgendarRequest,
-    ConsultaAgendadaDTO,
     PacienteCreate,
     PacienteCreatedDTO,
-    ConsultaPendenteDeConfirmacaoDTO,
-    ConsultaStatusSecretariaRequest,
 )
 from .startup_sql import run_startup_sql
 
 CARGO_FRONT_TO_DB = {
     "recepcionista": "secretaria",
-    "admin": "backoffice",
+    "admin": "secretaria",
+    "secretaria": "secretaria",
     "medico": "medico",
 }
 
@@ -90,6 +106,127 @@ def get_paciente_repository(conn=Depends(get_db)) -> PacienteRepository:
     return PacienteRepository(conn)
 
 
+def get_auth_repository(conn=Depends(get_db)) -> AuthRepository:
+    return AuthRepository(conn)
+
+
+def _auth_user_from_row(row: dict) -> AuthUserDTO:
+    return AuthUserDTO(
+        usuario_id=int(row["usuario_id"]),
+        pessoa_id=int(row["pessoa_id"]),
+        email=str(row["login_email"]),
+        nome=str(row["nome"]),
+        role=str(row["role"]),
+        paciente_id=int(row["paciente_id"]) if row.get("paciente_id") is not None else None,
+        funcionario_id=int(row["funcionario_id"]) if row.get("funcionario_id") is not None else None,
+    )
+
+
+def _extract_token(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer":
+        return None
+    token = token.strip()
+    return token or None
+
+
+def get_current_user_optional(
+    authorization: str | None = Header(default=None),
+    repo: AuthRepository = Depends(get_auth_repository),
+) -> AuthUserDTO | None:
+    token = _extract_token(authorization)
+    if token is None:
+        return None
+    row = repo.get_user_by_session_token(hash_token(token))
+    if row is None or not int(row.get("ativo", 0)):
+        return None
+    return _auth_user_from_row(row)
+
+
+def get_current_user(
+    authorization: str | None = Header(default=None),
+    repo: AuthRepository = Depends(get_auth_repository),
+) -> AuthUserDTO:
+    user = get_current_user_optional(authorization=authorization, repo=repo)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sessão inválida ou expirada.",
+        )
+    return user
+
+
+def require_roles(*roles: str):
+    def dependency(user: AuthUserDTO = Depends(get_current_user)) -> AuthUserDTO:
+        if user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Você não tem permissão para acessar este recurso.",
+            )
+        return user
+
+    return dependency
+
+
+@app.post("/auth/login", response_model=AuthLoginResponse)
+def auth_login(
+    body: AuthLoginRequest,
+    conn=Depends(get_db),
+    repo: AuthRepository = Depends(get_auth_repository),
+) -> AuthLoginResponse:
+    user_row = repo.get_user_by_email(body.email)
+    if user_row is None or not int(user_row.get("ativo", 0)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas.",
+        )
+    if not verify_password(body.senha, str(user_row["senha_salt"]), str(user_row["senha_hash"])):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas.",
+        )
+
+    token = create_session_token()
+    token_hash = hash_token(token)
+    expira_em = session_expiry().isoformat(timespec="seconds")
+
+    try:
+        conn.execute("BEGIN")
+        repo.delete_sessions_for_user(int(user_row["usuario_id"]))
+        repo.create_session(
+            usuario_id=int(user_row["usuario_id"]),
+            token_hash=token_hash,
+            expira_em=expira_em,
+        )
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__}: {e}",
+        ) from e
+
+    return AuthLoginResponse(token=token, user=_auth_user_from_row(user_row))
+
+
+@app.get("/auth/me", response_model=AuthMeResponse)
+def auth_me(current_user: AuthUserDTO = Depends(get_current_user)) -> AuthMeResponse:
+    return AuthMeResponse(user=current_user)
+
+
+@app.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+def auth_logout(
+    authorization: str | None = Header(default=None),
+    repo: AuthRepository = Depends(get_auth_repository),
+) -> Response:
+    token = _extract_token(authorization)
+    if token is not None:
+        repo.delete_session_by_token_hash(hash_token(token))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @app.get(
     "/consultas/disponiveis",
     response_model=ConsultasDisponiveisResponse,
@@ -97,6 +234,7 @@ def get_paciente_repository(conn=Depends(get_db)) -> PacienteRepository:
 def get_consultas_disponiveis(
     data: date,
     especialidade: str,
+    _current_user: AuthUserDTO = Depends(require_roles("paciente")),
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> ConsultasDisponiveisResponse:
     horarios = repo.get_horarios_disponiveis_por_especialidade(
@@ -113,9 +251,24 @@ def get_consultas_disponiveis(
 )
 def agendar_consulta(
     body: ConsultaAgendarRequest,
+    current_user: AuthUserDTO = Depends(require_roles("paciente")),
     conn=Depends(get_db),
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> ConsultaAgendadaDTO:
+    if body.paciente_id is not None and current_user.paciente_id is not None:
+        if body.paciente_id != current_user.paciente_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="O paciente autenticado não corresponde ao agendamento.",
+            )
+
+    paciente_id = current_user.paciente_id
+    if paciente_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Paciente autenticado inválido.",
+        )
+
     data_hora_str = f"{body.data.isoformat()} {body.hora}:00"
     try:
         conn.execute("BEGIN")
@@ -137,7 +290,7 @@ def agendar_consulta(
             INSERT INTO consultas (paciente_id, medico_id, data_hora, status)
             VALUES (?, ?, ?, ?)
             """,
-            (body.paciente_id, medico_id, data_hora_str, "agendada"),
+            (paciente_id, medico_id, data_hora_str, "agendada"),
         )
         consulta_id = int(cursor.lastrowid)
         conn.commit()
@@ -171,11 +324,20 @@ def agendar_consulta(
 )
 def create_paciente(
     body: PacienteCreate,
+    current_user: AuthUserDTO | None = Depends(get_current_user_optional),
     conn=Depends(get_db),
     pessoa_repo: PessoaRepository = Depends(get_pessoa_repository),
     paciente_repo: PacienteRepository = Depends(get_paciente_repository),
     convenio_repo: ConvenioRepository = Depends(get_convenio_repository),
+    auth_repo: AuthRepository = Depends(get_auth_repository),
 ) -> PacienteCreatedDTO:
+    if current_user is not None and current_user.role != "secretaria":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas a secretária pode cadastrar pacientes autenticada.",
+        )
+
+    email = normalize_email(body.email)
     cpf_digits = "".join(c for c in body.cpf if c.isdigit())
     if body.convenio == "particular":
         convenio_id = None
@@ -186,17 +348,26 @@ def create_paciente(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Convênio inválido ou não cadastrado.",
             )
+
+    senha_salt, senha_hash = hash_password(body.senha)
     try:
         conn.execute("BEGIN")
         pessoa_id = pessoa_repo.insert(
             nome=body.nome.strip(),
             cpf=cpf_digits,
-            email=body.email,
+            email=email,
             telefone=body.telefone,
         )
         paciente_id = paciente_repo.insert(
             pessoa_id=pessoa_id,
             convenio_id=convenio_id,
+        )
+        auth_repo.create_user(
+            pessoa_id=pessoa_id,
+            email=email,
+            role="paciente",
+            senha_salt=senha_salt,
+            senha_hash=senha_hash,
         )
         conn.commit()
     except sqlite3.IntegrityError as e:
@@ -221,10 +392,12 @@ def create_paciente(
 )
 def create_funcionario(
     body: FuncionarioCreate,
+    _current_user: AuthUserDTO = Depends(require_roles("secretaria")),
     conn=Depends(get_db),
     pessoa_repo: PessoaRepository = Depends(get_pessoa_repository),
     func_repo: FuncionarioRepository = Depends(get_funcionario_repository),
     esp_repo: EspecialidadeRepository = Depends(get_especialidade_repository),
+    auth_repo: AuthRepository = Depends(get_auth_repository),
 ) -> FuncionarioCreatedDTO:
     if body.cargo == "medico" and body.especialidade:
         if not esp_repo.codigo_exists(body.especialidade):
@@ -235,12 +408,15 @@ def create_funcionario(
     cpf_digits = "".join(c for c in body.cpf if c.isdigit())
     cargo_db = CARGO_FRONT_TO_DB[body.cargo]
     crm_val = (body.crm or "").strip() or None
+    role = "medico" if cargo_db == "medico" else "secretaria"
+    email = normalize_email(body.email)
+    senha_salt, senha_hash = hash_password(body.senha)
     try:
         conn.execute("BEGIN")
         pessoa_id = pessoa_repo.insert(
             nome=body.nome.strip(),
             cpf=cpf_digits,
-            email=body.email.strip(),
+            email=email,
             telefone=body.telefone,
         )
         funcionario_id = func_repo.insert(
@@ -248,6 +424,13 @@ def create_funcionario(
             cargo=cargo_db,
             crm=crm_val,
             especialidade=body.especialidade,
+        )
+        auth_repo.create_user(
+            pessoa_id=pessoa_id,
+            email=email,
+            role=role,
+            senha_salt=senha_salt,
+            senha_hash=senha_hash,
         )
         conn.commit()
     except sqlite3.IntegrityError as e:
@@ -275,8 +458,14 @@ def create_funcionario(
 def get_consultas_visao_medico(
     medico_id: int,
     data: date,
+    current_user: AuthUserDTO = Depends(require_roles("medico")),
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> list[ConsultaVisaoMedicoDTO]:
+    if current_user.funcionario_id != medico_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você só pode acessar a própria agenda.",
+        )
     try:
         consultas = repo.get_consultas_visao_medico(medico_id=medico_id, data=data)
         return [
@@ -293,11 +482,13 @@ def get_consultas_visao_medico(
             detail=f"{type(e).__name__}: {e}",
         ) from e
 
+
 @app.get(
     "/consultas/pendentes-de-confirmacao",
     response_model=list[ConsultaPendenteDeConfirmacaoDTO],
 )
 def get_consultas_pendentes_de_confirmacao(
+    _current_user: AuthUserDTO = Depends(require_roles("secretaria")),
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> list[ConsultaPendenteDeConfirmacaoDTO]:
     consultas = repo.get_consultas_pendentes_de_confirmacao()
@@ -320,6 +511,7 @@ def get_consultas_pendentes_de_confirmacao(
 def patch_consulta_status_secretaria(
     consulta_id: int,
     body: ConsultaStatusSecretariaRequest,
+    _current_user: AuthUserDTO = Depends(require_roles("secretaria")),
     conn=Depends(get_db),
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> Response:
