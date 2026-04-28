@@ -1,24 +1,80 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import Home from './pages/Home/Home';
 import EmployeeRegistration from './pages/CadastroFuncionario/EmployeeRegistration';
 import PatientRegistration from './pages/CadastroPaciente/PatientRegistration';
-import Home from './pages/Home/Home';
 import Schedule from './pages/Calendario/Schedule';
 import AppointmentConfirmation from './pages/ConfirmacaoConsultas/AppointmentConfirmation';
+import Login from './pages/Login/Login';
+import { AppShell } from '@/components/AppShell';
+import {
+  GuestOnly,
+  PatientRegistrationGate,
+  RequireAuth,
+} from '@/components/RouteGuards';
+
 function App() {
   return (
-    <Router> 
-      <div className="min-h-screen bg-slate-50">
-        <div className="container mx-auto">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/cadastro-funcionario" element={<EmployeeRegistration />} />
-            <Route path="/pacientes" element={<PatientRegistration />} />
-            <Route path="/calendario" element={<Schedule />} />
-            <Route path="/confirmacao-consultas" element={<AppointmentConfirmation />} />
-          </Routes>
-        </div>
-      </div>
-    </Router>
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <GuestOnly>
+              <Login />
+            </GuestOnly>
+          }
+        />
+        <Route
+          path="/pacientes"
+          element={
+            <PatientRegistrationGate>
+              <PatientRegistration />
+            </PatientRegistrationGate>
+          }
+        />
+        <Route
+          path="/"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <Home />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/cadastro-funcionario"
+          element={
+            <RequireAuth roles={['secretaria']}>
+              <AppShell>
+                <EmployeeRegistration />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/calendario"
+          element={
+            <RequireAuth roles={['paciente']}>
+              <AppShell>
+                <Schedule />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/confirmacao-consultas"
+          element={
+            <RequireAuth roles={['secretaria']}>
+              <AppShell>
+                <AppointmentConfirmation />
+              </AppShell>
+            </RequireAuth>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
