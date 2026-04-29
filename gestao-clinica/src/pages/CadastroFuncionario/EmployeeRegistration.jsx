@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { useAuth } from '@/context/AuthContext';
 import { readErrorMessage } from '@/lib/api';
+import { useCatalogOptions } from '@/hooks/useCatalogOptions';
 
 const INITIAL_STATE = {
   nome: '',
@@ -26,9 +27,23 @@ const INITIAL_STATE = {
   confirmarSenha: '',
 };
 
+const CARGO_OPTIONS = [
+  { value: 'secretaria', label: 'Secretária' },
+  { value: 'medico', label: 'Médico' },
+];
+
 const EmployeeRegistration = () => {
   const navigate = useNavigate();
   const { apiFetch } = useAuth();
+  const {
+    options: especialidades,
+    items: especialidadeItems,
+    loading: loadingEspecialidades,
+    error: especialidadesError,
+    reload: reloadEspecialidades,
+  } = useCatalogOptions('/especialidades');
+  const especialidadeCatalogBlocked =
+    loadingEspecialidades || (!especialidades.length && Boolean(especialidadesError));
 
   const [formData, setFormData] = useState(INITIAL_STATE);
   const [errors, setErrors] = useState({});
@@ -91,6 +106,9 @@ const EmployeeRegistration = () => {
       }
       if (!formData.especialidade) {
         novosErros.especialidade = 'A especialidade é obrigatória para médicos.';
+      }
+      if (especialidadesError && !especialidades.length) {
+        novosErros.especialidade = 'Recarregue as especialidades antes de cadastrar.';
       }
     }
     if (formData.senha.length < 6) novosErros.senha = 'Mínimo de 6 caracteres.';
@@ -212,13 +230,16 @@ const EmployeeRegistration = () => {
 
           <div className="space-y-2">
             <Label>Cargo</Label>
-            <Select value={formData.cargo} onValueChange={handleCargoChange}>
-              <SelectTrigger>
+            <Select items={CARGO_OPTIONS} value={formData.cargo} onValueChange={handleCargoChange}>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione o cargo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="secretaria">Secretária</SelectItem>
-                <SelectItem value="medico">Médico</SelectItem>
+                {CARGO_OPTIONS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -241,32 +262,47 @@ const EmployeeRegistration = () => {
               <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
                 <Label>Especialidade</Label>
                 <Select
-                  value={formData.especialidade}
+                  items={especialidadeItems}
+                  value={formData.especialidade || undefined}
                   onValueChange={(value) => {
                     setFormData((prev) => ({ ...prev, especialidade: value }));
                     if (errors.especialidade) {
                       setErrors((prev) => ({ ...prev, especialidade: '' }));
                     }
                   }}
+                  disabled={especialidadeCatalogBlocked}
                 >
-                  <SelectTrigger className={errors.especialidade ? 'border-red-500' : ''}>
-                    <SelectValue placeholder="Selecione a especialidade" />
+                  <SelectTrigger className={`w-full ${errors.especialidade ? 'border-red-500' : ''}`}>
+                    <SelectValue
+                      placeholder={
+                        loadingEspecialidades ? 'Carregando especialidades...' : 'Selecione a especialidade'
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cardiologia">Cardiologia</SelectItem>
-                    <SelectItem value="clinico_geral">Clínico Geral</SelectItem>
-                    <SelectItem value="dermatologia">Dermatologia</SelectItem>
-                    <SelectItem value="ginecologia">Ginecologia</SelectItem>
-                    <SelectItem value="neurologia">Neurologia</SelectItem>
-                    <SelectItem value="oftalmologia">Oftalmologia</SelectItem>
-                    <SelectItem value="ortopedia">Ortopedia</SelectItem>
-                    <SelectItem value="pediatria">Pediatria</SelectItem>
-                    <SelectItem value="psiquiatria">Psiquiatria</SelectItem>
+                    {especialidades.map((item) => (
+                      <SelectItem key={item.codigo} value={item.codigo}>
+                        {item.nome}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                {errors.especialidade && (
+                {especialidadesError ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    <p>{especialidadesError}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2 h-auto p-0 text-amber-700 hover:bg-transparent hover:text-amber-900"
+                      onClick={reloadEspecialidades}
+                    >
+                      Tentar novamente
+                    </Button>
+                  </div>
+                ) : errors.especialidade ? (
                   <span className="text-sm text-red-500 font-medium">{errors.especialidade}</span>
-                )}
+                ) : null}
               </div>
             </>
           ) : null}
@@ -300,7 +336,11 @@ const EmployeeRegistration = () => {
           </div>
         </div>
 
-        <Button type="submit" className="w-full mt-6" disabled={loading}>
+        <Button
+          type="submit"
+          className="w-full mt-6"
+          disabled={loading || (formData.cargo === 'medico' && especialidadeCatalogBlocked)}
+        >
           {loading ? 'Cadastrando...' : 'Cadastrar'}
         </Button>
       </form>

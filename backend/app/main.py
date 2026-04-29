@@ -25,6 +25,7 @@ from .repositories import (
     PessoaRepository,
 )
 from .schemas import (
+    CatalogItemDTO,
     AuthLoginRequest,
     AuthLoginResponse,
     AuthMeResponse,
@@ -122,6 +123,10 @@ def _auth_user_from_row(row: dict) -> AuthUserDTO:
     )
 
 
+def _normalize_code(value: str) -> str:
+    return value.strip().lower()
+
+
 def _extract_token(authorization: str | None) -> str | None:
     if not authorization:
         return None
@@ -156,6 +161,33 @@ def get_current_user(
             detail="Sessão inválida ou expirada.",
         )
     return user
+
+
+@app.get("/convenios", response_model=list[CatalogItemDTO])
+def list_convenios(
+    repo: ConvenioRepository = Depends(get_convenio_repository),
+) -> list[CatalogItemDTO]:
+    return repo.list_all()
+
+
+@app.get("/especialidades", response_model=list[CatalogItemDTO])
+def list_especialidades(
+    repo: EspecialidadeRepository = Depends(get_especialidade_repository),
+) -> list[CatalogItemDTO]:
+    return repo.list_all()
+
+
+def _validate_especialidade(
+    especialidade: str,
+    repo: EspecialidadeRepository,
+) -> str:
+    codigo = _normalize_code(especialidade)
+    if not codigo or not repo.codigo_exists(codigo):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Especialidade inválida ou não cadastrada.",
+        )
+    return codigo
 
 
 def require_roles(*roles: str):
@@ -235,10 +267,12 @@ def get_consultas_disponiveis(
     data: date,
     especialidade: str,
     _current_user: AuthUserDTO = Depends(require_roles("paciente")),
+    esp_repo: EspecialidadeRepository = Depends(get_especialidade_repository),
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> ConsultasDisponiveisResponse:
+    codigo_especialidade = _validate_especialidade(especialidade, esp_repo)
     horarios = repo.get_horarios_disponiveis_por_especialidade(
-        especialidade=especialidade,
+        especialidade=codigo_especialidade,
         data=data,
     )
     return ConsultasDisponiveisResponse(horarios=horarios)
@@ -254,6 +288,7 @@ def agendar_consulta(
     current_user: AuthUserDTO = Depends(require_roles("paciente")),
     conn=Depends(get_db),
     repo: ConsultaRepository = Depends(get_consulta_repository),
+    esp_repo: EspecialidadeRepository = Depends(get_especialidade_repository),
 ) -> ConsultaAgendadaDTO:
     if body.paciente_id is not None and current_user.paciente_id is not None:
         if body.paciente_id != current_user.paciente_id:
@@ -269,11 +304,12 @@ def agendar_consulta(
             detail="Paciente autenticado inválido.",
         )
 
+    especialidade = _validate_especialidade(body.especialidade, esp_repo)
     data_hora_str = f"{body.data.isoformat()} {body.hora}:00"
     try:
         conn.execute("BEGIN")
         medico_id = repo.get_primeiro_medico_disponivel(
-            especialidade=body.especialidade,
+            especialidade=especialidade,
             data=body.data,
             hora=body.hora,
         )
@@ -339,15 +375,13 @@ def create_paciente(
 
     email = normalize_email(body.email)
     cpf_digits = "".join(c for c in body.cpf if c.isdigit())
-    if body.convenio == "particular":
-        convenio_id = None
-    else:
-        convenio_id = convenio_repo.get_id_by_codigo(body.convenio)
-        if convenio_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Convênio inválido ou não cadastrado.",
-            )
+    convenio_codigo = _normalize_code(body.convenio)
+    convenio_id = convenio_repo.get_id_by_codigo(convenio_codigo)
+    if convenio_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Convênio inválido ou não cadastrado.",
+        )
 
     senha_salt, senha_hash = hash_password(body.senha)
     try:
@@ -400,11 +434,7 @@ def create_funcionario(
     auth_repo: AuthRepository = Depends(get_auth_repository),
 ) -> FuncionarioCreatedDTO:
     if body.cargo == "medico" and body.especialidade:
-        if not esp_repo.codigo_exists(body.especialidade):
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Especialidade inválida.",
-            )
+        _validate_especialidade(body.especialidade, esp_repo)
     cpf_digits = "".join(c for c in body.cpf if c.isdigit())
     cargo_db = CARGO_FRONT_TO_DB[body.cargo]
     crm_val = (body.crm or "").strip() or None

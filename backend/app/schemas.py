@@ -55,7 +55,9 @@ class FuncionarioCreate(BaseModel):
     @model_validator(mode="after")
     def medico_e_normalizacao(self):
         if self.cargo == "medico":
-            if not (self.crm or "").strip():
+            self.crm = (self.crm or "").strip()
+            self.especialidade = (self.especialidade or "").strip().lower()
+            if not self.crm:
                 raise ValueError("CRM é obrigatório para médicos.")
             if not self.especialidade:
                 raise ValueError("Especialidade é obrigatória para médicos.")
@@ -80,17 +82,25 @@ class PacienteCreate(BaseModel):
     email: str
     cpf: str
     telefone: Optional[str] = None
-    convenio: Literal["particular", "unimed", "bradesco", "amil"]
+    convenio: str
     senha: str
 
     @model_validator(mode="after")
     def email_nao_vazio(self):
+        self.convenio = (self.convenio or "").strip().lower()
         if not (self.email or "").strip():
             raise ValueError("E-mail é obrigatório.")
         self.email = self.email.strip().lower()
+        if not self.convenio:
+            raise ValueError("Convênio é obrigatório.")
         if not (self.senha or "").strip():
             raise ValueError("Senha é obrigatória.")
         return self
+
+
+class CatalogItemDTO(BaseModel):
+    codigo: str
+    nome: str
 
 
 class PacienteCreatedDTO(BaseModel):
@@ -114,6 +124,7 @@ class ConsultaAgendarRequest(BaseModel):
 
     @model_validator(mode="after")
     def validar_hora(self):
+        self.especialidade = (self.especialidade or "").strip().lower()
         # HH:MM (ex.: 09:30). Não validamos o passo 30 min aqui.
         if len(self.hora) != 5 or self.hora[2] != ":":
             raise ValueError("Hora inválida. Use o formato HH:MM.")
