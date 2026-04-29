@@ -7,16 +7,20 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/context/AuthContext';
 import { readErrorMessage } from '@/lib/api';
-
-const ESPECIALIDADES = [
-  { id: 'cardiologia', nome: 'Cardiologia' },
-  { id: 'pediatria', nome: 'Pediatria' },
-  { id: 'ortopedia', nome: 'Ortopedia' },
-];
+import { useCatalogOptions } from '@/hooks/useCatalogOptions';
 
 const Schedule = () => {
   const navigate = useNavigate();
   const { apiFetch } = useAuth();
+  const {
+    options: especialidades,
+    items: especialidadeItems,
+    loading: loadingEspecialidades,
+    error: especialidadesError,
+    reload: reloadEspecialidades,
+  } = useCatalogOptions('/especialidades');
+  const especialidadeCatalogBlocked =
+    loadingEspecialidades || (!especialidades.length && Boolean(especialidadesError));
 
   const [especialidade, setEspecialidade] = useState('');
   const [date, setDate] = useState(new Date());
@@ -25,7 +29,7 @@ const Schedule = () => {
   const [availableSlots, setAvailableSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [agendando, setAgendando] = useState(false);
-  const [error, setError] = useState('');
+  const [scheduleError, setScheduleError] = useState('');
 
   const availableSet = useMemo(() => new Set(availableSlots), [availableSlots]);
 
@@ -48,7 +52,7 @@ const Schedule = () => {
     async (dataObj = date, esp = especialidade) => {
       if (!esp) return;
       setLoadingSlots(true);
-      setError('');
+      setScheduleError('');
       setAvailableSlots([]);
       setSelectedSlot(null);
 
@@ -62,7 +66,7 @@ const Schedule = () => {
         const payload = await response.json();
         setAvailableSlots(payload?.horarios || []);
       } catch (error) {
-        setError(error.message || 'Erro ao buscar horários disponíveis.');
+        setScheduleError(error.message || 'Erro ao buscar horários disponíveis.');
         console.error('Erro ao buscar horários disponíveis:', error);
       } finally {
         setLoadingSlots(false);
@@ -74,7 +78,7 @@ const Schedule = () => {
   const handleAgendar = async () => {
     if (!selectedSlot || !especialidade) return;
     setAgendando(true);
-    setError('');
+    setScheduleError('');
 
     try {
       const response = await apiFetch('/consultas', {
@@ -94,7 +98,7 @@ const Schedule = () => {
       alert('Consulta agendada com sucesso!');
     } catch (error) {
       console.error('Erro ao agendar consulta:', error);
-      setError(error.message || 'Falha ao agendar consulta.');
+      setScheduleError(error.message || 'Falha ao agendar consulta.');
       alert(error.message || 'Falha ao agendar consulta.');
     } finally {
       setAgendando(false);
@@ -103,7 +107,7 @@ const Schedule = () => {
 
   useEffect(() => {
     if (especialidade) fetchDisponiveis();
-  }, [especialidade, fetchDisponiveis]);
+  }, [especialidade, date, fetchDisponiveis]);
 
   return (
     <div className="space-y-6">
@@ -120,28 +124,49 @@ const Schedule = () => {
             Qual especialidade você busca?
           </label>
           <Select
+            items={especialidadeItems}
+            value={especialidade || undefined}
             onValueChange={(value) => {
               setEspecialidade(value);
               setSelectedSlot(null);
             }}
+            disabled={especialidadeCatalogBlocked}
           >
-            <SelectTrigger className="bg-white">
-              <SelectValue placeholder="Selecione a especialidade" />
+            <SelectTrigger className="w-full bg-white">
+              <SelectValue
+                placeholder={
+                  loadingEspecialidades ? 'Carregando especialidades...' : 'Selecione a especialidade'
+                }
+              />
             </SelectTrigger>
             <SelectContent>
-              {ESPECIALIDADES.map((esp) => (
-                <SelectItem key={esp.id} value={esp.id}>
+              {especialidades.map((esp) => (
+                <SelectItem key={esp.codigo} value={esp.codigo}>
                   {esp.nome}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {especialidadesError ? (
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <p>{especialidadesError}</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mt-2 h-auto p-0 text-amber-700 hover:bg-transparent hover:text-amber-900"
+                onClick={reloadEspecialidades}
+              >
+                Tentar novamente
+              </Button>
+            </div>
+          ) : null}
         </div>
       </section>
 
-      {error ? (
+      {scheduleError ? (
         <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+          {scheduleError}
         </p>
       ) : null}
 
@@ -155,7 +180,11 @@ const Schedule = () => {
             <Calendar
               mode="single"
               selected={date}
-              onSelect={(selected) => selected && setDate(selected)}
+              onSelect={(selected) => {
+                if (!selected) return;
+                setDate(selected);
+                setSelectedSlot(null);
+              }}
               className="w-full rounded-md border-none p-0"
               classNames={{
                 months: 'w-full',
@@ -183,7 +212,7 @@ const Schedule = () => {
             <div className="mb-6 flex items-center justify-between gap-4">
               <h3 className="flex items-center text-lg font-bold text-slate-800">
                 <Clock className="mr-2 h-5 w-5 text-blue-600" />
-                Horários disponíveis para {ESPECIALIDADES.find((item) => item.id === especialidade)?.nome}
+                Horários disponíveis para {especialidades.find((item) => item.codigo === especialidade)?.nome}
               </h3>
               <Badge variant="outline">30 min</Badge>
             </div>
@@ -238,7 +267,11 @@ const Schedule = () => {
         <div className="flex flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-slate-200 bg-slate-50 py-20">
           <Stethoscope className="mb-4 h-10 w-10 text-slate-300" />
           <p className="max-w-md text-center text-slate-500 font-medium italic">
-            Selecione uma especialidade para visualizar as datas e horários disponíveis.
+            {loadingEspecialidades
+              ? 'Carregando especialidades...'
+              : especialidadesError
+                ? 'Não foi possível carregar as especialidades.'
+                : 'Selecione uma especialidade para visualizar as datas e horários disponíveis.'}
           </p>
         </div>
       )}

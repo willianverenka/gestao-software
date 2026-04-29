@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { readErrorMessage } from '@/lib/api';
 import { DateOfBirthPicker } from '@/components/DateOfBirthPicker';
+import { useCatalogOptions } from '@/hooks/useCatalogOptions';
 
 const INITIAL_STATE = {
   nome: '',
@@ -22,18 +23,47 @@ const INITIAL_STATE = {
   dataNascimento: '',
   telefone: '',
   genero: '',
-  convenio: 'particular',
+  convenio: '',
   senha: '',
   confirmarSenha: '',
 };
 
+const GENDER_OPTIONS = [
+  { value: 'masculino', label: 'Masculino' },
+  { value: 'feminino', label: 'Feminino' },
+  { value: 'outro', label: 'Outro' },
+];
+
 const PatientRegistration = () => {
   const navigate = useNavigate();
   const { user, apiFetch } = useAuth();
+  const {
+    options: convenios,
+    items: convenioItems,
+    loading: loadingConvenios,
+    error: convenioError,
+    reload: reloadConvenios,
+  } = useCatalogOptions('/convenios');
+  const convenioCatalogBlocked = loadingConvenios || (!convenios.length && Boolean(convenioError));
 
   const [formData, setFormData] = useState(INITIAL_STATE);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (loadingConvenios || convenios.length === 0) return;
+
+    setFormData((prev) => {
+      if (prev.convenio && convenios.some((item) => item.codigo === prev.convenio)) {
+        return prev;
+      }
+
+      const particular = convenios.find((item) => item.codigo === 'particular');
+      const fallback = particular?.codigo || convenios[0].codigo;
+      if (prev.convenio === fallback) return prev;
+      return { ...prev, convenio: fallback };
+    });
+  }, [convenios, loadingConvenios]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -59,6 +89,10 @@ const PatientRegistration = () => {
     if (formData.senha.length < 6) novosErros.senha = 'Mínimo de 6 caracteres.';
     if (formData.senha !== formData.confirmarSenha) {
       novosErros.confirmarSenha = 'As senhas não coincidem.';
+    }
+    if (!formData.convenio) novosErros.convenio = 'Selecione um convênio.';
+    if (convenioError && !convenios.length) {
+      novosErros.convenio = 'Recarregue os convênios antes de cadastrar.';
     }
 
     if (Object.keys(novosErros).length > 0) {
@@ -190,16 +224,19 @@ const PatientRegistration = () => {
           <div className="space-y-2">
             <Label>Gênero</Label>
             <Select
+              items={GENDER_OPTIONS}
               value={formData.genero || undefined}
               onValueChange={(value) => handleSelectChange('genero', value)}
             >
-              <SelectTrigger>
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="masculino">Masculino</SelectItem>
-                <SelectItem value="feminino">Feminino</SelectItem>
-                <SelectItem value="outro">Outro</SelectItem>
+                {GENDER_OPTIONS.map((item) => (
+                  <SelectItem key={item.value} value={item.value}>
+                    {item.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -207,19 +244,40 @@ const PatientRegistration = () => {
           <div className="space-y-2">
             <Label>Convênio</Label>
             <Select
-              value={formData.convenio}
+              items={convenioItems}
+              value={formData.convenio || undefined}
               onValueChange={(value) => handleSelectChange('convenio', value)}
+              disabled={convenioCatalogBlocked}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o convênio" />
+              <SelectTrigger className="w-full">
+                <SelectValue
+                  placeholder={loadingConvenios ? 'Carregando convênios...' : 'Selecione o convênio'}
+                />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="particular">Particular (Sem Convênio)</SelectItem>
-                <SelectItem value="unimed">Unimed</SelectItem>
-                <SelectItem value="bradesco">Bradesco Saúde</SelectItem>
-                <SelectItem value="amil">Amil</SelectItem>
+                {convenios.map((item) => (
+                  <SelectItem key={item.codigo} value={item.codigo}>
+                    {item.nome}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            {convenioError ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <p>{convenioError}</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-2 h-auto p-0 text-amber-700 hover:bg-transparent hover:text-amber-900"
+                  onClick={reloadConvenios}
+                >
+                  Tentar novamente
+                </Button>
+              </div>
+            ) : errors.convenio ? (
+              <span className="text-sm font-medium text-red-500">{errors.convenio}</span>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -251,7 +309,11 @@ const PatientRegistration = () => {
           </div>
         </div>
 
-        <Button type="submit" className="w-full mt-6 gap-2" disabled={loading}>
+        <Button
+          type="submit"
+          className="w-full mt-6 gap-2"
+          disabled={loading || convenioCatalogBlocked}
+        >
           {loading ? 'Salvando...' : 'Cadastrar Paciente'}
           {!loading ? <CheckCircle2 className="h-4 w-4" /> : null}
         </Button>

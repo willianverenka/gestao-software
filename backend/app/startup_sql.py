@@ -102,6 +102,7 @@ def ensure_convenio_codigo_column(conn) -> None:
 
 def seed_convenios(conn) -> None:
     rows = (
+        ("particular", "Particular"),
         ("unimed", "Unimed"),
         ("bradesco", "Bradesco Saúde"),
         ("amil", "Amil"),
