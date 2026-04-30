@@ -77,6 +77,14 @@ class FuncionarioCreatedDTO(BaseModel):
     pessoa_id: int
 
 
+class MedicoPerfilDTO(BaseModel):
+    funcionario_id: int
+    nome: str
+    crm: Optional[str] = None
+    especialidade_codigo: Optional[str] = None
+    especialidade_nome: Optional[str] = None
+
+
 class PacienteCreate(BaseModel):
     nome: str
     email: str
@@ -144,6 +152,8 @@ class ConsultaVisaoMedicoDTO(BaseModel):
     consulta_id: int
     data_hora: datetime
     paciente_nome: str
+    status: Literal["agendada", "confirmada", "cancelada"]
+    convenio_nome: str
 
 
 ConsultaVisaoMedicoList = List[ConsultaVisaoMedicoDTO]

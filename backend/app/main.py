@@ -38,6 +38,7 @@ from .schemas import (
     ConsultasDisponiveisResponse,
     FuncionarioCreate,
     FuncionarioCreatedDTO,
+    MedicoPerfilDTO,
     PacienteCreate,
     PacienteCreatedDTO,
 )
@@ -200,6 +201,14 @@ def require_roles(*roles: str):
         return user
 
     return dependency
+
+
+def _require_own_medico(current_user: AuthUserDTO, medico_id: int) -> None:
+    if current_user.funcionario_id != medico_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você só pode acessar a própria agenda.",
+        )
 
 
 @app.post("/auth/login", response_model=AuthLoginResponse)
@@ -482,6 +491,39 @@ def create_funcionario(
 
 
 @app.get(
+    "/medicos/{medico_id}/perfil",
+    response_model=MedicoPerfilDTO,
+)
+def get_medico_profile(
+    medico_id: int,
+    current_user: AuthUserDTO = Depends(require_roles("medico")),
+    repo: FuncionarioRepository = Depends(get_funcionario_repository),
+) -> MedicoPerfilDTO:
+    _require_own_medico(current_user, medico_id)
+    profile = repo.get_medico_profile(funcionario_id=medico_id)
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Médico não encontrado.",
+        )
+    return MedicoPerfilDTO(
+        funcionario_id=int(profile["funcionario_id"]),
+        nome=str(profile["nome"]),
+        crm=str(profile["crm"]) if profile.get("crm") is not None else None,
+        especialidade_codigo=(
+            str(profile["especialidade_codigo"])
+            if profile.get("especialidade_codigo") is not None
+            else None
+        ),
+        especialidade_nome=(
+            str(profile["especialidade_nome"])
+            if profile.get("especialidade_nome") is not None
+            else None
+        ),
+    )
+
+
+@app.get(
     "/medicos/{medico_id}/consultas",
     response_model=list[ConsultaVisaoMedicoDTO],
 )
@@ -491,11 +533,7 @@ def get_consultas_visao_medico(
     current_user: AuthUserDTO = Depends(require_roles("medico")),
     repo: ConsultaRepository = Depends(get_consulta_repository),
 ) -> list[ConsultaVisaoMedicoDTO]:
-    if current_user.funcionario_id != medico_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Você só pode acessar a própria agenda.",
-        )
+    _require_own_medico(current_user, medico_id)
     try:
         consultas = repo.get_consultas_visao_medico(medico_id=medico_id, data=data)
         return [
@@ -503,9 +541,41 @@ def get_consultas_visao_medico(
                 consulta_id=c["consulta_id"],
                 data_hora=c["data_hora"],
                 paciente_nome=c["paciente_nome"],
+                status=c["status"],
+                convenio_nome=c["convenio_nome"],
             )
             for c in consultas
         ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(e).__name__}: {e}",
+        ) from e
+
+
+@app.get(
+    "/medicos/{medico_id}/consultas/datas",
+    response_model=list[date],
+)
+def get_datas_com_consultas_visao_medico(
+    medico_id: int,
+    ano: int,
+    mes: int,
+    current_user: AuthUserDTO = Depends(require_roles("medico")),
+    repo: ConsultaRepository = Depends(get_consulta_repository),
+) -> list[date]:
+    _require_own_medico(current_user, medico_id)
+    if mes < 1 or mes > 12:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Mês inválido.",
+        )
+    try:
+        return repo.get_datas_com_consultas_visao_medico(
+            medico_id=medico_id,
+            ano=ano,
+            mes=mes,
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

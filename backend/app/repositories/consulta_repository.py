@@ -8,6 +8,8 @@ class ConsultaVisaoMedicoRow(TypedDict):
     consulta_id: int
     data_hora: str
     paciente_nome: str
+    status: str
+    convenio_nome: str
 
 class ConsultaPendenteDeConfirmacaoRow(TypedDict):
     consulta_id: int
@@ -28,10 +30,13 @@ class ConsultaRepository(BaseRepository):
             SELECT
                 c.consulta_id,
                 c.data_hora,
-                pe.nome AS paciente_nome
+                pe.nome AS paciente_nome,
+                c.status,
+                COALESCE(cv.nome, 'Não informado') AS convenio_nome
             FROM consultas c
             JOIN pacientes p ON c.paciente_id = p.paciente_id
             JOIN pessoas pe ON p.pessoa_id = pe.pessoa_id
+            LEFT JOIN convenios cv ON p.convenio_id = cv.convenio_id
             WHERE
                 c.medico_id = ?
                 AND date(c.data_hora) = ?
@@ -47,9 +52,33 @@ class ConsultaRepository(BaseRepository):
                 consulta_id=row[0],
                 data_hora=row[1],
                 paciente_nome=row[2],
+                status=row[3],
+                convenio_nome=row[4],
             )
             for row in rows
         ]
+
+    def get_datas_com_consultas_visao_medico(
+        self,
+        medico_id: int,
+        ano: int,
+        mes: int,
+    ) -> List[date]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT DISTINCT date(c.data_hora) AS data_consulta
+            FROM consultas c
+            WHERE
+                c.medico_id = ?
+                AND strftime('%Y', c.data_hora) = ?
+                AND strftime('%m', c.data_hora) = ?
+            ORDER BY data_consulta ASC
+            """,
+            (medico_id, f"{ano:04d}", f"{mes:02d}"),
+        )
+        rows = cursor.fetchall()
+        return [date.fromisoformat(str(row[0])) for row in rows]
 
     def get_medicos_por_especialidade(self, especialidade: str) -> List[int]:
         cursor = self.conn.cursor()

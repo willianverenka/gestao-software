@@ -44,6 +44,8 @@ const ROLE_SECTIONS = {
       title: 'Agenda médica',
       description: 'Espaço reservado para a agenda e as rotinas do médico.',
       icon: Stethoscope,
+      action: '/agenda-medico',
+      button: 'Ver agenda',
       tone: 'bg-blue-50 text-blue-700 border-blue-100',
     },
   ],
