@@ -92,6 +92,7 @@ class PacienteCreate(BaseModel):
     telefone: Optional[str] = None
     convenio: str
     senha: str
+    aceitou_termos: bool = False
 
     @model_validator(mode="after")
     def email_nao_vazio(self):
@@ -103,6 +104,8 @@ class PacienteCreate(BaseModel):
             raise ValueError("Convênio é obrigatório.")
         if not (self.senha or "").strip():
             raise ValueError("Senha é obrigatória.")
+        if not self.aceitou_termos:
+            raise ValueError("Você precisa aceitar os termos de uso para concluir o cadastro.")
         return self
 
 

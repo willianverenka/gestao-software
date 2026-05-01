@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, UserPlus } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ShieldCheck, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,6 +26,7 @@ const INITIAL_STATE = {
   convenio: '',
   senha: '',
   confirmarSenha: '',
+  aceitouTermos: false,
 };
 
 const GENDER_OPTIONS = [
@@ -66,8 +67,8 @@ const PatientRegistration = () => {
   }, [convenios, loadingConvenios]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
@@ -89,6 +90,9 @@ const PatientRegistration = () => {
     if (formData.senha.length < 6) novosErros.senha = 'Mínimo de 6 caracteres.';
     if (formData.senha !== formData.confirmarSenha) {
       novosErros.confirmarSenha = 'As senhas não coincidem.';
+    }
+    if (!formData.aceitouTermos) {
+      novosErros.aceitouTermos = 'Você precisa aceitar os termos de uso para continuar.';
     }
     if (!formData.convenio) novosErros.convenio = 'Selecione um convênio.';
     if (convenioError && !convenios.length) {
@@ -112,6 +116,7 @@ const PatientRegistration = () => {
           telefone: formData.telefone || null,
           convenio: formData.convenio,
           senha: formData.senha,
+          aceitou_termos: formData.aceitouTermos,
         },
       });
 
@@ -306,6 +311,52 @@ const PatientRegistration = () => {
             {errors.confirmarSenha && (
               <span className="text-sm text-red-500 font-medium">{errors.confirmarSenha}</span>
             )}
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Termos de uso e privacidade</h3>
+                <p className="mt-1 text-sm leading-6 text-slate-600">
+                  Ao concluir o cadastro, você autoriza o armazenamento dos seus dados
+                  pessoais e dados sensíveis de saúde nesta plataforma para viabilizar
+                  agendamentos, atendimento e histórico clínico.
+                </p>
+              </div>
+
+              <ul className="list-disc space-y-1 pl-5 text-sm leading-6 text-slate-600">
+                <li>Seus dados poderão ser acessados apenas por profissionais autorizados.</li>
+                <li>As informações enviadas serão usadas para fins assistenciais e cadastrais.</li>
+                <li>Você confirma que os dados informados neste cadastro são verdadeiros.</li>
+              </ul>
+
+              <label
+                htmlFor="aceitouTermos"
+                className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/80 bg-white/90 p-3 text-sm text-slate-700 shadow-sm"
+              >
+                <input
+                  id="aceitouTermos"
+                  name="aceitouTermos"
+                  type="checkbox"
+                  checked={formData.aceitouTermos}
+                  onChange={handleChange}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span>
+                  Li e aceito os termos de uso, incluindo o armazenamento dos meus dados
+                  pessoais e dados médicos na plataforma.
+                </span>
+              </label>
+
+              {errors.aceitouTermos ? (
+                <span className="block text-sm font-medium text-red-500">{errors.aceitouTermos}</span>
+              ) : null}
+            </div>
           </div>
         </div>
 
