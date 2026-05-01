@@ -4,6 +4,8 @@ import {
   ArrowLeft,
   Calendar as CalendarIcon,
   Clock,
+  Loader2,
+  Printer,
   User,
   Stethoscope,
   FileText,
@@ -97,6 +99,8 @@ const AgendaMedico = () => {
   const [loadingCalendar, setLoadingCalendar] = useState(true);
   const [profileError, setProfileError] = useState('');
   const [consultasError, setConsultasError] = useState('');
+  const [printingAgenda, setPrintingAgenda] = useState(false);
+  const [printError, setPrintError] = useState('');
   const medicoId = user?.funcionario_id ?? null;
 
   const dateKey = formatDate(selectedDate);
@@ -104,6 +108,7 @@ const AgendaMedico = () => {
   const stats = useMemo(() => SUMMARY_STATS(consultasDoDia), [consultasDoDia]);
   const medicoEspecialidade = medico?.especialidade_nome || 'Especialidade não informada';
   const medicoCrm = medico?.crm || 'CRM não informado';
+  const printDisabled = !medicoId || loadingConsultas || printingAgenda;
 
   const loadProfile = useCallback(async () => {
     if (!medicoId) {
@@ -190,6 +195,43 @@ const AgendaMedico = () => {
     }
   }, [apiFetch, medicoId, visibleMonth]);
 
+  const handlePrintAgenda = useCallback(async () => {
+    if (!medicoId) {
+      setPrintError('Sessão do médico inválida.');
+      return;
+    }
+
+    setPrintingAgenda(true);
+    setPrintError('');
+
+    try {
+      const response = await apiFetch(`/medicos/${medicoId}/agenda/pdf?data=${dateKey}`);
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, 'Falha ao gerar a agenda para impressão.'));
+      }
+
+      const pdfBlob = await response.blob();
+      if (!pdfBlob || pdfBlob.size === 0) {
+        throw new Error('Falha ao gerar a agenda para impressão.');
+      }
+
+      const fileName = `agenda-medico-${dateKey}.pdf`;
+      const objectUrl = window.URL.createObjectURL(pdfBlob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      setPrintError(error.message || 'Falha ao gerar a agenda para impressão.');
+    } finally {
+      setPrintingAgenda(false);
+    }
+  }, [apiFetch, dateKey, medicoId]);
+
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
@@ -201,6 +243,10 @@ const AgendaMedico = () => {
   useEffect(() => {
     loadCalendarMarkers();
   }, [loadCalendarMarkers]);
+
+  useEffect(() => {
+    setPrintError('');
+  }, [dateKey]);
 
   return (
     <div className="max-w-6xl mx-auto mt-8 p-6">
@@ -329,10 +375,35 @@ const AgendaMedico = () => {
                   year: 'numeric',
                 })}
               </h2>
-              <Badge variant="outline" className="text-indigo-600 border-indigo-200">
-                {stats.total} {stats.total === 1 ? 'consulta' : 'consultas'}
-              </Badge>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="text-indigo-600 border-indigo-200">
+                  {stats.total} {stats.total === 1 ? 'consulta' : 'consultas'}
+                </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                  onClick={handlePrintAgenda}
+                  disabled={printDisabled}
+                >
+                  {printingAgenda ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Printer className="mr-2 h-4 w-4" />
+                  )}
+                  {printingAgenda ? 'Gerando PDF...' : 'Imprimir Agenda'}
+                </Button>
+              </div>
             </div>
+
+            {printError ? (
+              <div className="px-6 pt-4">
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                  {printError}
+                </div>
+              </div>
+            ) : null}
 
             {consultasError ? (
               <div className="px-6 py-8">

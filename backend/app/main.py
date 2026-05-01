@@ -14,6 +14,7 @@ from .auth import (
     session_expiry,
     verify_password,
 )
+from .agenda_pdf import build_agenda_pdf
 from .db import get_db, with_connection
 from .repositories import (
     AuthRepository,
@@ -581,6 +582,56 @@ def get_datas_com_consultas_visao_medico(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"{type(e).__name__}: {e}",
         ) from e
+
+
+@app.get(
+    "/medicos/{medico_id}/agenda/pdf",
+)
+def get_agenda_pdf_medico(
+    medico_id: int,
+    data: date,
+    current_user: AuthUserDTO = Depends(require_roles("medico")),
+    consulta_repo: ConsultaRepository = Depends(get_consulta_repository),
+    funcionario_repo: FuncionarioRepository = Depends(get_funcionario_repository),
+) -> Response:
+    _require_own_medico(current_user, medico_id)
+
+    profile = funcionario_repo.get_medico_profile(funcionario_id=medico_id)
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Médico não encontrado.",
+        )
+
+    consultas = consulta_repo.get_consultas_para_impressao_agenda_medico(
+        medico_id=medico_id,
+        data=data,
+    )
+    if not consultas:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Não há agendas para serem impressas nesse período.",
+        )
+
+    pdf_bytes = build_agenda_pdf(
+        medico_nome=str(profile["nome"]),
+        crm=str(profile["crm"]) if profile.get("crm") is not None else None,
+        especialidade=(
+            str(profile["especialidade_nome"])
+            if profile.get("especialidade_nome") is not None
+            else None
+        ),
+        data_agenda=data,
+        consultas=consultas,
+    )
+    filename = f"agenda-medico-{data.isoformat()}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+    )
 
 
 @app.get(

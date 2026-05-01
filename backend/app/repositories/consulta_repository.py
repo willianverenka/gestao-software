@@ -11,6 +11,12 @@ class ConsultaVisaoMedicoRow(TypedDict):
     status: str
     convenio_nome: str
 
+class ConsultaAgendaImpressaoRow(TypedDict):
+    consulta_id: int
+    data_hora: datetime
+    paciente_nome: str
+    convenio_nome: str
+
 class ConsultaPendenteDeConfirmacaoRow(TypedDict):
     consulta_id: int
     paciente_nome: str
@@ -79,6 +85,44 @@ class ConsultaRepository(BaseRepository):
         )
         rows = cursor.fetchall()
         return [date.fromisoformat(str(row[0])) for row in rows]
+
+    def get_consultas_para_impressao_agenda_medico(
+        self,
+        medico_id: int,
+        data: date,
+    ) -> List[ConsultaAgendaImpressaoRow]:
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                c.consulta_id,
+                c.data_hora,
+                pe.nome AS paciente_nome,
+                COALESCE(cv.nome, 'Não informado') AS convenio_nome
+            FROM consultas c
+            JOIN pacientes p ON c.paciente_id = p.paciente_id
+            JOIN pessoas pe ON p.pessoa_id = pe.pessoa_id
+            LEFT JOIN convenios cv ON p.convenio_id = cv.convenio_id
+            WHERE
+                c.medico_id = ?
+                AND date(c.data_hora) = ?
+                AND c.status = 'confirmada'
+            ORDER BY
+                c.data_hora ASC
+            """,
+            (medico_id, data.isoformat()),
+        )
+        rows = cursor.fetchall()
+
+        return [
+            ConsultaAgendaImpressaoRow(
+                consulta_id=int(row[0]),
+                data_hora=datetime.fromisoformat(str(row[1])),
+                paciente_nome=str(row[2]),
+                convenio_nome=str(row[3]),
+            )
+            for row in rows
+        ]
 
     def get_medicos_por_especialidade(self, especialidade: str) -> List[int]:
         cursor = self.conn.cursor()
