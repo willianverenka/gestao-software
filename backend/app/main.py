@@ -42,6 +42,8 @@ from .schemas import (
     MedicoPerfilDTO,
     PacienteCreate,
     PacienteCreatedDTO,
+    AgendaMedicoResponse,
+    AgendaSlotDTO,
 )
 from .startup_sql import run_startup_sql
 
@@ -316,45 +318,47 @@ def agendar_consulta(
 
     especialidade = _validate_especialidade(body.especialidade, esp_repo)
     data_hora_str = f"{body.data.isoformat()} {body.hora}:00"
+    
     try:
-        conn.execute("BEGIN")
-        medico_id = repo.get_primeiro_medico_disponivel(
+        consulta_id = repo.agendar_consulta_atomico(
             especialidade=especialidade,
             data=body.data,
             hora=body.hora,
+            paciente_id=paciente_id,
         )
-        if medico_id is None:
-            conn.rollback()
+        
+        if consulta_id is None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Nenhum médico disponível para o horário informado.",
             )
-
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO consultas (paciente_id, medico_id, data_hora, status)
-            VALUES (?, ?, ?, ?)
-            """,
-            (paciente_id, medico_id, data_hora_str, "agendada"),
-        )
-        consulta_id = int(cursor.lastrowid)
-        conn.commit()
-    except HTTPException as e:
-        conn.rollback()
-        raise e
+    
     except sqlite3.IntegrityError as e:
-        conn.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"{type(e).__name__}: {e}",
+            detail=f"Conflito ao agendar consulta: {str(e)}",
         ) from e
     except Exception as e:
-        conn.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"{type(e).__name__}: {e}",
         ) from e
+
+    # Fetch medico_id to return in response
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT medico_id FROM consultas WHERE consulta_id = ?",
+        (consulta_id,)
+    )
+    result = cursor.fetchone()
+    
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Consulta criada mas não foi encontrada no banco de dados.",
+        )
+    
+    medico_id = int(result[0])
 
     return ConsultaAgendadaDTO(
         consulta_id=consulta_id,
@@ -688,3 +692,35 @@ def patch_consulta_status_secretaria(
             detail=f"{type(e).__name__}: {e}",
         ) from e
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@app.get(
+    "/medicos/{medico_id}/agenda",
+    response_model=AgendaMedicoResponse,
+)
+def get_agenda_medico(
+    medico_id: int,
+    data: date,
+    repo: ConsultaRepository = Depends(get_consulta_repository),
+) -> AgendaMedicoResponse:
+    # 1. Buscar consultas do médico no dia
+    consultas = repo.get_consultas_do_medico_no_dia(
+        medico_id=medico_id,
+        data=data,
+    )
+
+    # 2. Montar agenda (slots fixos)
+    agenda = repo.montar_agenda(consultas)
+
+    # 3. Retornar resposta
+    return AgendaMedicoResponse(
+        medico_id=medico_id,
+        data=data,
+        agenda=[
+            AgendaSlotDTO(
+                hora=slot["hora"],
+                status=slot["status"],
+                paciente_id=slot.get("paciente_id"),
+            )
+            for slot in agenda
+        ],
+    )
