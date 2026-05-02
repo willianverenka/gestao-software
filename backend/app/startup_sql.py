@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS consultas (
     status TEXT NOT NULL CHECK (status IN ('agendada', 'confirmada', 'cancelada')),
     FOREIGN KEY (paciente_id) REFERENCES pacientes(paciente_id),
     FOREIGN KEY (medico_id) REFERENCES funcionarios(funcionario_id)
+    UNIQUE (medico_id, data_hora)
 );
 
 CREATE TABLE IF NOT EXISTS usuarios (
@@ -321,6 +322,11 @@ def seed_demo_consultas(conn) -> None:
         (int(paciente_id_row["paciente_id"]), int(medico_id_row["funcionario_id"]), data_hora.isoformat(sep=" ")),
     )
 
+def ensure_consultas_unique_index(conn) -> None:
+    conn.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_consulta_unica
+        ON consultas(medico_id, data_hora)
+    """)
 
 def run_startup_sql(conn) -> None:
     """Executa os statements de STARTUP_SQL na conexão fornecida (sqlite3)."""
@@ -336,4 +342,5 @@ def run_startup_sql(conn) -> None:
     ensure_funcionario_extra_columns(conn)
     seed_demo_auth_users(conn)
     seed_demo_consultas(conn)
+    ensure_consultas_unique_index(conn)
     conn.commit()
