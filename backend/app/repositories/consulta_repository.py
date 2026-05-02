@@ -266,3 +266,58 @@ class ConsultaRepository(BaseRepository):
             (novo_status, consulta_id),
         )
         return cursor.rowcount == 1
+
+    #OK
+    def agendar_consulta_atomico(
+        self,
+        especialidade: str,
+        data: date,
+        hora: str,
+        paciente_id: int,
+    ) -> Optional[int]:
+        """
+        Encontra o primeiro médico disponível e insere a consulta atomicamente.
+        Retorna consulta_id ou None se não houver horário disponível.
+        Lança sqlite3.IntegrityError se a constraint UNIQUE for violada (fallback de segurança).
+        """
+        medicos = self.get_medicos_por_especialidade(especialidade=especialidade)
+        if not medicos:
+            return None
+
+        data_hora_str = f"{data.isoformat()} {hora}:00"
+        placeholders = ",".join(["?"] * len(medicos))
+
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            cursor = self.conn.cursor()
+
+            cursor.execute(
+                f"""
+                SELECT DISTINCT medico_id
+                FROM consultas
+                WHERE medico_id IN ({placeholders})
+                AND data_hora = ?
+                AND status != 'cancelada'
+                """,
+                (*medicos, data_hora_str),
+            )
+            busy = {int(r[0]) for r in cursor.fetchall()}
+
+            medico_livre = next((m for m in medicos if m not in busy), None)
+            if medico_livre is None:
+                self.conn.execute("ROLLBACK")
+                return None
+
+            cursor.execute(
+                """
+                INSERT INTO consultas (paciente_id, medico_id, data_hora, status)
+                VALUES (?, ?, ?, 'agendada')
+                """,
+                (paciente_id, medico_livre, data_hora_str),
+            )
+            self.conn.execute("COMMIT")
+            return int(cursor.lastrowid)
+
+        except Exception:
+            self.conn.execute("ROLLBACK")
+            raise
