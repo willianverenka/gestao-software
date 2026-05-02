@@ -172,9 +172,10 @@ class ConsultaPendenteDeConfirmacaoDTO(BaseModel):
 class ConsultaStatusSecretariaRequest(BaseModel):
     status: Literal["confirmada", "cancelada"]
 
+
 class AgendaSlotDTO(BaseModel):
     hora: str
-    status: str
+    status: str  # "livre" | "ocupado"
     paciente_id: Optional[int] = None
 
 
