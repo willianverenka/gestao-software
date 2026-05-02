@@ -24,6 +24,16 @@ class ConsultaPendenteDeConfirmacaoRow(TypedDict):
     data_hora: datetime
     status: str
 
+class ConsultaRow(TypedDict):
+    data_hora: str
+    status: str
+    paciente_id: int
+
+class AgendaSlotRow(TypedDict):
+    hora: str
+    status: str
+    paciente_id: Optional[int]
+
 class ConsultaRepository(BaseRepository):
     def get_consultas_visao_medico(
         self,
@@ -266,3 +276,135 @@ class ConsultaRepository(BaseRepository):
             (novo_status, consulta_id),
         )
         return cursor.rowcount == 1
+
+    #OK
+    def agendar_consulta_atomico(
+        self,
+        especialidade: str,
+        data: date,
+        hora: str,
+        paciente_id: int,
+    ) -> Optional[int]:
+        """
+        Encontra o primeiro médico disponível e insere a consulta atomicamente.
+        Retorna consulta_id ou None se não houver horário disponível.
+        Lança sqlite3.IntegrityError se a constraint UNIQUE for violada (fallback de segurança).
+        """
+        medicos = self.get_medicos_por_especialidade(especialidade=especialidade)
+        if not medicos:
+            return None
+
+        data_hora_str = f"{data.isoformat()} {hora}:00"
+        placeholders = ",".join(["?"] * len(medicos))
+
+        with self.transaction("IMMEDIATE"):
+            cursor = self.conn.cursor()
+
+            cursor.execute(
+                f"""
+                SELECT DISTINCT medico_id
+                FROM consultas
+                WHERE medico_id IN ({placeholders})
+                  AND data_hora = ?
+                  AND status != 'cancelada'
+                """,
+                (*medicos, data_hora_str),
+            )
+
+            busy = {int(r[0]) for r in cursor.fetchall()}
+
+            medico_livre = next((m for m in medicos if m not in busy), None)
+
+            if medico_livre is None:
+                # ⚠️ importante: não precisa rollback manual
+                return None
+
+            cursor.execute(
+                """
+                INSERT INTO consultas (paciente_id, medico_id, data_hora, status)
+                VALUES (?, ?, ?, 'agendada')
+                """,
+                (paciente_id, medico_livre, data_hora_str),
+            )
+
+            consulta_id = cursor.lastrowid
+            if consulta_id is None:
+                raise RuntimeError(
+                    "Falha ao obter ID da consulta inserida. "
+                    "Verifique se a tabela 'consultas' possui uma coluna PRIMARY KEY AUTOINCREMENT."
+                )
+            return int(consulta_id)
+        
+    def get_consultas_do_medico_no_dia(
+        self,
+        medico_id: int,
+        data: date,
+    ) -> List[ConsultaRow]:
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT
+                c.data_hora,
+                c.status,
+                c.paciente_id
+            FROM consultas c
+            WHERE
+                c.medico_id = ?
+                AND date(c.data_hora) = ?
+                AND c.status != 'cancelada'
+            """,
+            (medico_id, data.isoformat()),
+        )
+
+        rows = cursor.fetchall()
+
+        return [
+            ConsultaRow(
+                data_hora=str(row[0]),
+                status=str(row[1]),
+                paciente_id=int(row[2]),
+            )
+            for row in rows
+        ]
+
+
+    HORARIOS_PADRAO = [
+    "05:00", "05:30","06:00", "06:30","07:00", "07:30",
+    "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
+    "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", 
+    "16:00", "16:30", "17:00", "17:30", "18:00", "18:30",
+]
+
+
+    def montar_agenda(
+        self,
+        consultas: List[ConsultaRow],
+    ) -> List[AgendaSlotRow]:
+
+        ocupados: Dict[str, ConsultaRow] = {
+            row["data_hora"][11:16]: row
+            for row in consultas
+        }
+
+        agenda: List[AgendaSlotRow] = []
+
+        for hora in self.HORARIOS_PADRAO:
+            if hora in ocupados:
+                agenda.append(
+                    AgendaSlotRow(
+                        hora=hora,
+                        status="ocupado",
+                        paciente_id=ocupados[hora]["paciente_id"],
+                    )
+                )
+            else:
+                agenda.append(
+                    AgendaSlotRow(
+                        hora=hora,
+                        status="livre",
+                        paciente_id=None,
+                    )
+                )
+
+        return agenda
