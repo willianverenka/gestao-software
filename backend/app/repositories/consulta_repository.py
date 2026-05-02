@@ -287,8 +287,7 @@ class ConsultaRepository(BaseRepository):
         data_hora_str = f"{data.isoformat()} {hora}:00"
         placeholders = ",".join(["?"] * len(medicos))
 
-        self.conn.execute("BEGIN IMMEDIATE")
-        try:
+        with self.transaction("IMMEDIATE"):
             cursor = self.conn.cursor()
 
             cursor.execute(
@@ -296,16 +295,18 @@ class ConsultaRepository(BaseRepository):
                 SELECT DISTINCT medico_id
                 FROM consultas
                 WHERE medico_id IN ({placeholders})
-                AND data_hora = ?
-                AND status != 'cancelada'
+                  AND data_hora = ?
+                  AND status != 'cancelada'
                 """,
                 (*medicos, data_hora_str),
             )
+
             busy = {int(r[0]) for r in cursor.fetchall()}
 
             medico_livre = next((m for m in medicos if m not in busy), None)
+
             if medico_livre is None:
-                self.conn.execute("ROLLBACK")
+                # ⚠️ importante: não precisa rollback manual
                 return None
 
             cursor.execute(
@@ -315,9 +316,11 @@ class ConsultaRepository(BaseRepository):
                 """,
                 (paciente_id, medico_livre, data_hora_str),
             )
-            self.conn.execute("COMMIT")
-            return int(cursor.lastrowid)
 
-        except Exception:
-            self.conn.execute("ROLLBACK")
-            raise
+            consulta_id = cursor.lastrowid
+            if consulta_id is None:
+                raise RuntimeError(
+                    "Falha ao obter ID da consulta inserida. "
+                    "Verifique se a tabela 'consultas' possui uma coluna PRIMARY KEY AUTOINCREMENT."
+                )
+            return int(consulta_id)
